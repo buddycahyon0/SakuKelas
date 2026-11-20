@@ -15,8 +15,9 @@
   <meta name="apple-mobile-web-app-title" content="PintarSD" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
-  <!-- CSS statis (Tailwind sudah di-build) + font Nunito lokal. Tidak ada CDN. -->
+  <!-- CSS statis lokal + Tailwind CDN fallback agar tampilan tetap rapi di mode Preview -->
   <link rel="stylesheet" href="./styles.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
 
   <style>
     body {
@@ -55,18 +56,19 @@
         </div>
       </button>
 
-      <!-- Status & Upload Studio -->
+      <!-- Status, Admin Studio (Hidden), Sync & Logout -->
       <div class="flex items-center gap-2">
         <div id="sync-badge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
           <span id="sync-dot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
           <span id="sync-text">Mode Offline</span>
         </div>
 
-        <button onclick="openStudioModal()" class="min-h-[44px] px-3.5 py-2 rounded-2xl bg-amber-400 hover:bg-amber-500 active:scale-95 text-amber-950 font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-2xs transition">
+        <!-- Hidden untuk pembeli biasa. Muncul hanya jika diakses dengan ?admin=1 -->
+        <button id="btn-admin-studio" onclick="openStudioModal()" class="hidden min-h-[44px] px-3.5 py-2 rounded-2xl bg-amber-400 hover:bg-amber-500 active:scale-95 text-amber-950 font-black text-xs sm:text-sm items-center gap-1.5 shadow-2xs transition">
           <span>+ Tambah Materi</span>
         </button>
 
-        <button id="btn-sync" onclick="syncDataFromCloud(true)" title="Update Materi"
+        <button id="btn-sync" onclick="syncDataFromCloud(true)" title="Update Materi & Soal"
           class="min-h-[44px] min-w-[44px] px-3 py-2 rounded-2xl bg-sky-50 hover:bg-sky-100 active:scale-95 text-sky-700 font-extrabold text-xs sm:text-sm border border-sky-200 flex items-center justify-center transition">
           <svg id="sync-icon" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
@@ -74,6 +76,11 @@
             <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
             <path d="M16 16h5v5" />
           </svg>
+        </button>
+
+        <button id="btn-logout" onclick="handleLogout()" title="Keluar Akun"
+          class="hidden min-h-[44px] px-3 py-2 rounded-2xl bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 font-extrabold text-xs border border-rose-200 transition">
+          Keluar
         </button>
       </div>
     </div>
@@ -98,7 +105,7 @@
             <span class="inline-block px-3 py-1 rounded-full bg-white/20 text-xs font-extrabold tracking-wide mb-2">
               🌟 KURIKULUM MERDEKA & JARIMATIKA
             </span>
-            <h1 class="text-2xl sm:text-3xl font-black leading-tight">Halo, Adik Kelas 1! 👋</h1>
+            <h1 id="hero-greeting" class="text-2xl sm:text-3xl font-black leading-tight">Halo, Adik Kelas 1! 👋</h1>
             <p class="text-sky-100 text-sm sm:text-base font-semibold mt-1">
               Pilih Folder Semester di bawah ini, lalu ketuk bab pelajaran untuk mulai belajar!
             </p>
@@ -196,7 +203,42 @@
     </section>
   </main>
 
-  <!-- MODAL TAMBAH / UPLOAD MATERI -->
+  <!-- LAYAR LOGIN PEMBELI -->
+  <div id="login-gate" class="hidden fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5 animate-pop">
+      <div class="text-center space-y-1.5">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white flex items-center justify-center text-2xl font-black mx-auto shadow-sm">
+          🎒
+        </div>
+        <h2 class="text-2xl font-black text-slate-800">Masuk ke PintarSD</h2>
+        <p class="text-xs sm:text-sm font-semibold text-slate-500">
+          Masukkan Kode Akses & PIN yang kamu terima saat pembelian untuk menyimpan progres belajar anak.
+        </p>
+      </div>
+
+      <form onsubmit="handleLoginSubmit(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-extrabold text-slate-600 mb-1">Kode Akses</label>
+          <input id="login-kode" type="text" required placeholder="Contoh: BUDI2026" autocomplete="off"
+            class="w-full min-h-[48px] px-4 rounded-2xl border-2 border-slate-200 font-black uppercase text-sm focus:border-sky-500 outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-extrabold text-slate-600 mb-1">PIN (4-6 Angka)</label>
+          <input id="login-pin" type="password" inputmode="numeric" required placeholder="••••"
+            class="w-full min-h-[48px] px-4 rounded-2xl border-2 border-slate-200 font-black text-sm tracking-widest focus:border-sky-500 outline-none" />
+        </div>
+
+        <div id="login-error" class="hidden p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700 text-center"></div>
+
+        <button id="btn-login-submit" type="submit"
+          class="w-full min-h-[50px] rounded-2xl bg-sky-600 hover:bg-sky-700 text-white font-black text-base shadow-xs transition">
+          Masuk & Mulai Belajar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL TAMBAH / UPLOAD MATERI (KHUSUS ADMIN) -->
   <div id="studio-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
     <div class="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-xl border border-slate-200 space-y-5 my-auto max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -289,7 +331,7 @@
       <div id="studio-json-panel" class="hidden space-y-4">
         <div class="p-4 rounded-2xl bg-sky-50 border border-sky-200 space-y-2">
           <h3 class="font-black text-sm text-sky-900">1. Upload File Paket Materi (.JSON)</h3>
-          <p class="text-xs font-semibold text-sky-800">Pilih file <code>.json</code> dari <b>PintarSD JSON Converter</b> untuk menambahkan bab baru secara instan.</p>
+          <p class="text-xs font-semibold text-sky-800">Pilih file <code>.json</code> untuk menambahkan bab baru secara instan.</p>
           <label class="block mt-2">
             <span class="sr-only">Pilih File JSON</span>
             <input type="file" accept=".json,application/json" onchange="handleJsonFileUpload(event)"
@@ -307,7 +349,7 @@
 
         <div class="pt-2 border-t border-slate-100 flex justify-between items-center">
           <span class="text-xs font-bold text-slate-400">Reset ke bawaan awal jika perlu:</span>
-          <button onclick="resetToDefaultContent()" class="text-xs font-extrabold text-rose-600 hover:underline">
+          <button id="btn-reset-default" onclick="resetToDefaultContent()" class="text-xs font-extrabold text-rose-600 hover:underline">
             Reset Data Bawaan
           </button>
         </div>
@@ -321,24 +363,19 @@
      * 1. KONFIGURASI GOOGLE APPS SCRIPT & CACHE OFFLINE-FIRST
      * =====================================================================
      */
-    const API_URL = "";
+    // TEMPEL WEB APP URL DARI GOOGLE APPS SCRIPT KAMU DI BAWAH INI:
+    const API_URL = "https://script.google.com/macros/s/AKfycby9G_cs0eCCBnS2tcbCG9kiqSUX_W1umPFSYAksvIW51HEQAu58t-MWNLqIGcM41kTeqA/exec";
 
     const STORAGE_KEYS = {
+      AUTH: 'pintarsd_k1_session_v1',
       PROGRESS: 'pintarsd_k1_progress_v1',
       LAST_SYNC: 'pintarsd_k1_last_sync_v1',
-      CUSTOM: 'pintarsd_k1_custom_v1',          // bab buatan sendiri / hasil impor (data user)
-      CLOUD: 'pintarsd_k1_cloud_v1',            // snapshot materi dari cloud (opsional)
-      LEGACY_CONTENT: 'pintarsd_k1_content_v11' // key lama, hanya dibaca untuk migrasi
+      CUSTOM: 'pintarsd_k1_custom_v1',
+      CLOUD: 'pintarsd_k1_cloud_v1',
+      LEGACY_CONTENT: 'pintarsd_k1_content_v11'
     };
-    // Konten bawaan SELALU dibaca dari kode (bukan dari localStorage), jadi edit DEFAULT_DATA
-    // langsung terbaca dan tidak menghapus bab buatan user. Saat rilis, naikkan juga
-    // CACHE_VERSION di sw.js agar HP user mengambil index.html baru.
-    const CONTENT_VERSION = 12;
+    const CONTENT_VERSION = 13;
 
-    /**
-     * Helper keamanan & validasi. Semua data dari luar (impor JSON, cloud, form Studio)
-     * wajib lewat normalizeData() sebelum disimpan atau dirender.
-     */
     const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
     function esc(v) {
@@ -405,12 +442,12 @@
       const mSeen = new Set(), sSeen = new Set();
       const materi = (Array.isArray(d && d.materi) ? d.materi : []).slice(0, 500)
         .map(normalizeMateri).filter(m => m && !mSeen.has(m.id) && mSeen.add(m.id));
-      const soal = (Array.isArray(d && d.soal) ? d.soal : []).slice(0, 3000)
+      // Limit dinaikkan ke 10.000 soal agar muat 100+ soal per bab
+      const soal = (Array.isArray(d && d.soal) ? d.soal : []).slice(0, 10000)
         .map(normalizeSoal).filter(q => q && !sSeen.has(q.id) && sSeen.add(q.id));
       return { materi: materi, soal: soal };
     }
 
-    // Penyimpanan aman: tidak melempar error saat storage penuh / diblokir.
     function readJson(key) {
       try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : null; } catch (e) { return null; }
     }
@@ -426,40 +463,21 @@
      */
     const DEFAULT_DATA = {
       materi: [
-        // =================================================================
-        // PENDIDIKAN PANCASILA BAB 1–4 (SEMESTER 1 & 2)
-        // =================================================================
+        // PENDIDIKAN PANCASILA (8 BAB)
         {
-          id: "PPKN-S1-01",
-          semester: 1,
-          kurikulum: "Buku Pendidikan Pancasila Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Pancasila",
+          id: "PPKN-S1-01", semester: 1, kurikulum: "Buku Pendidikan Pancasila Kemdikbud", kelas: 1, mapel: "Pendidikan Pancasila",
           bab: "Bab 1: Aku Cinta Pancasila (Simbol & Sila Garuda Pancasila)",
           deskripsi: "Mengenal lambang negara Garuda Pancasila, 5 simbol perisai, serta bunyi dan penerapan sila 1–5.",
           ringkasan_intro: "Di Bab 1 Pendidikan Pancasila Kelas 1, kita mengenal lambang negara Indonesia yaitu Garuda Pancasila. Di dadanya terdapat perisai berisi 5 simbol yang melambangkan 5 sila Pancasila.",
           poin_penting: [
-            {
-              judul: "Sila 1 & Sila 2 (Bintang & Rantai)",
-              isi: "Sila 1: Ketuhanan Yang Maha Esa (Simbol: Bintang Emas — rajin beribadah & berdoa). Sila 2: Kemanusiaan yang Adil dan Beradab (Simbol: Rantai Emas — saling menyayangi & menolong teman)."
-            },
-            {
-              judul: "Sila 3 (Pohon Beringin)",
-              isi: "Persatuan Indonesia (Simbol: Pohon Beringin — hidup rukun bersama teman walau berbeda suku dan agama)."
-            },
-            {
-              judul: "Sila 4 & Sila 5 (Kepala Banteng & Padi Kapas)",
-              isi: "Sila 4: Kerakyatan yang Dipimpin oleh Hikmat Kebijaksanaan dalam Permusyawaratan/Perwakilan (Simbol: Kepala Banteng — bermusyawarah). Sila 5: Keadilan Sosial bagi Seluruh Rakyat Indonesia (Simbol: Padi dan Kapas — bersikap adil & suka berbagi)."
-            }
+            { judul: "Sila 1 & Sila 2 (Bintang & Rantai)", isi: "Sila 1: Ketuhanan Yang Maha Esa (Simbol: Bintang Emas — rajin beribadah & berdoa). Sila 2: Kemanusiaan yang Adil dan Beradab (Simbol: Rantai Emas — saling menyayangi & menolong teman)." },
+            { judul: "Sila 3 (Pohon Beringin)", isi: "Persatuan Indonesia (Simbol: Pohon Beringin — hidup rukun bersama teman walau berbeda suku dan agama)." },
+            { judul: "Sila 4 & Sila 5 (Kepala Banteng & Padi Kapas)", isi: "Sila 4: Kerakyatan yang Dipimpin oleh Hikmat Kebijaksanaan dalam Permusyawaratan/Perwakilan (Simbol: Kepala Banteng — bermusyawarah). Sila 5: Keadilan Sosial bagi Seluruh Rakyat Indonesia (Simbol: Padi dan Kapas — bersikap adil & suka berbagi)." }
           ],
           cara_biasa_judul: "Cara Biasa (Membaca Teks 5 Sila di Buku)",
-          cara_biasa_langkah: [
-            "Membaca bunyi Pancasila nomor 1 sampai 5 dan melihat gambar perisai di buku siswa."
-          ],
+          cara_biasa_langkah: ["Membaca bunyi Pancasila nomor 1 sampai 5 dan melihat gambar perisai di buku siswa."],
           cara_cepat_judul: "Jembatan Keledai: '5 Simbol = Bin - Ran - Po - Ban - PaKa' ⚡",
-          cara_cepat_langkah: [
-            "1. BINtang (Berdoa) | 2. RANtai (Menolong) | 3. POhon Beringin (Rukun) | 4. BANteng (Musyawarah) | 5. PAdi & KApas (Adil & Berbagi)!"
-          ],
+          cara_cepat_langkah: ["1. BINtang (Berdoa) | 2. RANtai (Menolong) | 3. POhon Beringin (Rukun) | 4. BANteng (Musyawarah) | 5. PAdi & KApas (Adil & Berbagi)!"],
           visual_type: "pancasila_symbols",
           visual_caption: "Ketuk tombol Sila 1 sampai 5 di bawah untuk melihat simbol perisai, bunyi sila, dan contoh sikapnya!",
           video_judul: "Pendidikan Pancasila Kelas 1 Bab 1: Aku Cinta Pancasila",
@@ -467,32 +485,18 @@
           video_url: "https://www.youtube.com/results?search_query=pendidikan+pancasila+kelas+1+bab+1+aku+cinta+pancasila+kurikulum+merdeka"
         },
         {
-          id: "PPKN-S1-02",
-          semester: 1,
-          kurikulum: "Buku Pendidikan Pancasila Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Pancasila",
+          id: "PPKN-S1-02", semester: 1, kurikulum: "Buku Pendidikan Pancasila Kemdikbud", kelas: 1, mapel: "Pendidikan Pancasila",
           bab: "Bab 2: Aku Anak yang Patuh Aturan (Di Rumah & Sekolah)",
           deskripsi: "Memahami aturan di rumah dan di sekolah, akibat melanggar aturan, serta membiasakan hidup tertib.",
           ringkasan_intro: "Di Bab 2, kita belajar bahwa aturan dibuat agar hidup kita menjadi tertib, aman, dan nyaman. Anak yang patuh aturan disayang oleh orang tua, guru, dan teman-teman.",
           poin_penting: [
-            {
-              judul: "Contoh Aturan di Rumah",
-              isi: "Merapikan tempat tidur setelah bangun, pamit dan mencium tangan orang tua sebelum berangkat sekolah, meletakkan sepatu di rak, dan tidur tidak terlalu malam."
-            },
-            {
-              judul: "Contoh Aturan di Sekolah",
-              isi: "Datang ke sekolah tepat waktu, memakai seragam rapi sesuai jadwal, mendengarkan guru saat mengajar, dan melaksanakan piket kelas."
-            }
+            { judul: "Contoh Aturan di Rumah", isi: "Merapikan tempat tidur setelah bangun, pamit dan mencium tangan orang tua sebelum berangkat sekolah, meletakkan sepatu di rak, dan tidur tidak terlalu malam." },
+            { judul: "Contoh Aturan di Sekolah", isi: "Datang ke sekolah tepat waktu, memakai seragam rapi sesuai jadwal, mendengarkan guru saat mengajar, dan melaksanakan piket kelas." }
           ],
           cara_biasa_judul: "Cara Biasa (Membaca Daftar Tata Tertib)",
-          cara_biasa_langkah: [
-            "Membaca daftar aturan di rumah dan tata tertib sekolah di buku pelajaran."
-          ],
+          cara_biasa_langkah: ["Membaca daftar aturan di rumah dan tata tertib sekolah di buku pelajaran."],
           cara_cepat_judul: "Trik Jitu: 'Aturan = Bikin Aman, Rapi, & Tepat Waktu!' ⚡",
-          cara_cepat_langkah: [
-            "Ingat 3 kata kunci anak patuh aturan: PAMIT (sebelum pergi), RAPI (taruh barang di tempatnya), dan TEPAT WAKTU!"
-          ],
+          cara_cepat_langkah: ["Ingat 3 kata kunci anak patuh aturan: PAMIT (sebelum pergi), RAPI (taruh barang di tempatnya), dan TEPAT WAKTU!"],
           visual_type: "pancasila_rules",
           visual_caption: "Ketuk lokasi di bawah (Rumah, Sekolah, atau Tempat Bermain) untuk melihat aturan pentingnya!",
           video_judul: "Pendidikan Pancasila Kelas 1 Bab 2: Aku Anak yang Patuh Aturan",
@@ -500,32 +504,18 @@
           video_url: "https://www.youtube.com/results?search_query=pendidikan+pancasila+kelas+1+bab+2+aku+anak+yang+patuh+aturan"
         },
         {
-          id: "PPKN-S1-03",
-          semester: 1,
-          kurikulum: "Buku Pendidikan Pancasila Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Pancasila",
+          id: "PPKN-S1-03", semester: 1, kurikulum: "Buku Pendidikan Pancasila Kemdikbud", kelas: 1, mapel: "Pendidikan Pancasila",
           bab: "Bab 3: Mengenal Warna Perisai & Penerapan Sila di Rumah",
           deskripsi: "Mengenal arti warna emas, merah, putih, hitam, hijau pada perisai Garuda serta contoh pengamalan sila 1–5 di rumah.",
           ringkasan_intro: "Selain gambar simbolnya, perisai di dada Garuda Pancasila memiliki warna dasar merah dan putih seperti bendera Indonesia, serta garis hitam tebal di tengah yang melambangkan garis khatulistiwa.",
           poin_penting: [
-            {
-              judul: "Arti Warna pada Garuda Pancasila",
-              isi: "Warna Emas = kejayaan & kemuliaan • Merah = keberanian • Putih = kesucian • Hitam = keabadian • Hijau = kesuburan."
-            },
-            {
-              judul: "Penerapan Sila di Rumah",
-              isi: "Berdoa bersama sebelum makan (Sila 1), membantu adik belajar (Sila 2), tidak bertengkar dengan kakak/adik (Sila 3), berdiskusi memilih tujuan liburan keluarga (Sila 4), dan hemat memakai air & listrik (Sila 5)."
-            }
+            { judul: "Arti Warna pada Garuda Pancasila", isi: "Warna Emas = kejayaan & kemuliaan • Merah = keberanian • Putih = kesucian • Hitam = keabadian • Hijau = kesuburan." },
+            { judul: "Penerapan Sila di Rumah", isi: "Berdoa bersama sebelum makan (Sila 1), membantu adik belajar (Sila 2), tidak bertengkar dengan kakak/adik (Sila 3), berdiskusi memilih tujuan liburan keluarga (Sila 4), dan hemat memakai air & listrik (Sila 5)." }
           ],
           cara_biasa_judul: "Cara Biasa (Mewarnai Gambar Garuda)",
-          cara_biasa_langkah: [
-            "Mengamati warna setiap kotak pada perisai Garuda Pancasila di buku siswa."
-          ],
+          cara_biasa_langkah: ["Mengamati warna setiap kotak pada perisai Garuda Pancasila di buku siswa."],
           cara_cepat_judul: "Trik Jitu: 'Ingat Warna Dasar Perisai = Merah & Putih!' ⚡",
-          cara_cepat_langkah: [
-            "Sama seperti bendera kita! Kiri atas & kanan bawah = MERAH | Kanan atas & kiri bawah = PUTIH | Tengah (Bintang) = HITAM!"
-          ],
+          cara_cepat_langkah: ["Sama seperti bendera kita! Kiri atas & kanan bawah = MERAH | Kanan atas & kiri bawah = PUTIH | Tengah (Bintang) = HITAM!"],
           visual_type: "pancasila_colors",
           visual_caption: "Ketuk setiap bagian perisai Garuda di atas untuk melihat warna dan artinya!",
           video_judul: "Pendidikan Pancasila Kelas 1: Warna Perisai Garuda Pancasila",
@@ -533,32 +523,18 @@
           video_url: "https://www.youtube.com/results?search_query=warna+perisai+garuda+pancasila+kelas+1+sd"
         },
         {
-          id: "PPKN-S1-04",
-          semester: 1,
-          kurikulum: "Buku Pendidikan Pancasila Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Pancasila",
+          id: "PPKN-S1-04", semester: 1, kurikulum: "Buku Pendidikan Pancasila Kemdikbud", kelas: 1, mapel: "Pendidikan Pancasila",
           bab: "Bab 4: Akibat Mematuhi vs Melanggar Aturan",
           deskripsi: "Membandingkan manfaat hidup disiplin dan akibat buruk jika melanggar aturan di rumah maupun di sekolah.",
           ringkasan_intro: "Setiap tindakan memiliki akibat. Jika kita mematuhi aturan, suasana menjadi damai dan kita disayang banyak orang. Sebaliknya, melanggar aturan bisa merugikan diri sendiri dan orang lain.",
           poin_penting: [
-            {
-              judul: "Akibat Melanggar Aturan",
-              isi: "Terlambat bangun pagi karena tidur larut malam, kelas menjadi kotor jika membuang sampah sembarangan, dan bisa terjatuh jika berlarian di koridor kelas."
-            },
-            {
-              judul: "Manfaat Mematuhi Aturan",
-              isi: "Belajar menjadi tenang, barang-barang tidak mudah hilang karena ditaruh rapi, dan terhindar dari bahaya."
-            }
+            { judul: "Akibat Melanggar Aturan", isi: "Terlambat bangun pagi karena tidur larut malam, kelas menjadi kotor jika membuang sampah sembarangan, dan bisa terjatuh jika berlarian di koridor kelas." },
+            { judul: "Manfaat Mematuhi Aturan", isi: "Belajar menjadi tenang, barang-barang tidak mudah hilang karena ditaruh rapi, dan terhindar dari bahaya." }
           ],
           cara_biasa_judul: "Cara Biasa (Memasangkan Gambar Sebab-Akibat)",
-          cara_biasa_langkah: [
-            "Mencocokkan gambar perilaku tertib dan tidak tertib dengan akibatnya."
-          ],
+          cara_biasa_langkah: ["Mencocokkan gambar perilaku tertib dan tidak tertib dengan akibatnya."],
           cara_cepat_judul: "Trik Jitu: 'Tanya Diri Sendiri: Aman & Rapi Tidak?' ⚡",
-          cara_cepat_langkah: [
-            "Sebelum bertindak ingat: Patuh aturan = SELAMAT & DISAYANG | Langgar aturan = RUGI & DITEGUR!"
-          ],
+          cara_cepat_langkah: ["Sebelum bertindak ingat: Patuh aturan = SELAMAT & DISAYANG | Langgar aturan = RUGI & DITEGUR!"],
           visual_type: "pancasila_rules",
           visual_caption: "Ketuk lokasi di bawah untuk mengulang aturan tertib di rumah, sekolah, dan tempat bermain!",
           video_judul: "Pendidikan Pancasila Kelas 1: Manfaat Mematuhi Aturan",
@@ -566,32 +542,18 @@
           video_url: "https://www.youtube.com/results?search_query=manfaat+mematuhi+aturan+kelas+1+sd"
         },
         {
-          id: "PPKN-S2-01",
-          semester: 2,
-          kurikulum: "Buku Pendidikan Pancasila Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Pancasila",
+          id: "PPKN-S2-01", semester: 2, kurikulum: "Buku Pendidikan Pancasila Kemdikbud", kelas: 1, mapel: "Pendidikan Pancasila",
           bab: "Bab 5: Aku Mengenal Diriku & Keberagaman Teman",
           deskripsi: "Mengenal identitas diri, perbedaan ciri fisik, agama, suku, dan hobi dengan sikap saling menghargai.",
           ringkasan_intro: "Di Bab 3 Semester 2, kita belajar memperkenalkan identitas diri (nama lengkap, nama panggilan, alamat, hobi) serta menghargai keberagaman ciri fisik, suku bangsa, dan agama teman-teman kita.",
           poin_penting: [
-            {
-              judul: "Identitas Diri Lengkap",
-              isi: "Setiap anak memiliki identitas diri: nama lengkap, nama panggilan, jenis kelamin, umur, nama orang tua, dan alamat rumah."
-            },
-            {
-              judul: "Semboyan Bhinneka Tunggal Ika",
-              isi: "Tertulis pada pita yang dicengkeram burung Garuda Pancasila, artinya 'Berbeda-beda tetapi tetap satu jua'."
-            }
+            { judul: "Identitas Diri Lengkap", isi: "Setiap anak memiliki identitas diri: nama lengkap, nama panggilan, jenis kelamin, umur, nama orang tua, dan alamat rumah." },
+            { judul: "Semboyan Bhinneka Tunggal Ika", isi: "Tertulis pada pita yang dicengkeram burung Garuda Pancasila, artinya 'Berbeda-beda tetapi tetap satu jua'." }
           ],
           cara_biasa_judul: "Cara Biasa (Membaca Cerita Perkenalan Teman)",
-          cara_biasa_langkah: [
-            "Membaca teks perkenalan karakter siswa dari berbagai daerah di Indonesia."
-          ],
+          cara_biasa_langkah: ["Membaca teks perkenalan karakter siswa dari berbagai daerah di Indonesia."],
           cara_cepat_judul: "Trik Jitu: 'Bhinneka Tunggal Ika = Beda-Beda Tetap Satu!' ⚡",
-          cara_cepat_langkah: [
-            "Ingat pita putih di kaki Garuda Pancasila bertuliskan BHINNEKA TUNGGAL IKA → Berbeda-beda tetapi tetap satu jua!"
-          ],
+          cara_cepat_langkah: ["Ingat pita putih di kaki Garuda Pancasila bertuliskan BHINNEKA TUNGGAL IKA → Berbeda-beda tetapi tetap satu jua!"],
           visual_type: "pancasila_diversity",
           visual_caption: "Ketuk kartu di bawah untuk mengenal identitas diri, keberagaman, dan semboyan negara kita!",
           video_judul: "Pendidikan Pancasila Kelas 1 Bab 3: Mengenal Diri & Keberagaman",
@@ -599,32 +561,18 @@
           video_url: "https://www.youtube.com/results?search_query=pendidikan+pancasila+kelas+1+bab+3+mengenal+diriku+kurikulum+merdeka"
         },
         {
-          id: "PPKN-S2-02",
-          semester: 2,
-          kurikulum: "Buku Pendidikan Pancasila Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Pancasila",
+          id: "PPKN-S2-02", semester: 2, kurikulum: "Buku Pendidikan Pancasila Kemdikbud", kelas: 1, mapel: "Pendidikan Pancasila",
           bab: "Bab 6: Aku Cinta Lingkungan & Gotong Royong",
           deskripsi: "Mengenal bagian rumah dan lingkungan sekitar serta membiasakan gotong royong membersihkan rumah dan sekolah.",
           ringkasan_intro: "Di Semester 2, kita belajar mengenal lingkungan rumah dan tetangga serta bekerja sama (gotong royong) menjaga kebersihan agar lingkungan sehat dan asri.",
           poin_penting: [
-            {
-              judul: "Arti & Manfaat Gotong Royong",
-              isi: "Gotong royong artinya bekerja sama secara bersama-sama untuk mencapai tujuan. Manfaatnya: pekerjaan berat menjadi ringan, cepat selesai, dan mempererat persaudaraan."
-            },
-            {
-              judul: "Contoh Gotong Royong di Rumah & Sekolah",
-              isi: "Di rumah: membersihkan halaman bersama ayah dan ibu. Di sekolah: piket menyapu kelas dan membersihkan papan tulis bersama regu piket."
-            }
+            { judul: "Arti & Manfaat Gotong Royong", isi: "Gotong royong artinya bekerja sama secara bersama-sama untuk mencapai tujuan. Manfaatnya: pekerjaan berat menjadi ringan, cepat selesai, dan mempererat persaudaraan." },
+            { judul: "Contoh Gotong Royong di Rumah & Sekolah", isi: "Di rumah: membersihkan halaman bersama ayah dan ibu. Di sekolah: piket menyapu kelas dan membersihkan papan tulis bersama regu piket." }
           ],
           cara_biasa_judul: "Cara Biasa (Membaca Cerita Kerja Bakti)",
-          cara_biasa_langkah: [
-            "Membaca cerita warga dan siswa yang melakukan kerja bakti membersihkan lingkungan."
-          ],
+          cara_biasa_langkah: ["Membaca cerita warga dan siswa yang melakukan kerja bakti membersihkan lingkungan."],
           cara_cepat_judul: "Trik Jitu: 'Gotong Royong = Berat Jadi Ringan, Lama Jadi Cepat!' ⚡",
-          cara_cepat_langkah: [
-            "Dikerjakan SENDIRI = Berat & Lama | Dikerjakan GOTONG ROYONG = Ringan & Cepat Selesai!"
-          ],
+          cara_cepat_langkah: ["Dikerjakan SENDIRI = Berat & Lama | Dikerjakan GOTONG ROYONG = Ringan & Cepat Selesai!"],
           visual_type: "pancasila_gotong_royong",
           visual_caption: "Ketuk contoh kegiatan di bawah untuk melihat manfaat kerja sama dan gotong royong!",
           video_judul: "Pendidikan Pancasila Kelas 1 Bab 4: Aku Cinta Lingkungan & Gotong Royong",
@@ -632,32 +580,18 @@
           video_url: "https://www.youtube.com/results?search_query=pendidikan+pancasila+kelas+1+bab+4+aku+cinta+lingkungan+gotong+royong"
         },
         {
-          id: "PPKN-S2-03",
-          semester: 2,
-          kurikulum: "Buku Pendidikan Pancasila Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Pancasila",
+          id: "PPKN-S2-03", semester: 2, kurikulum: "Buku Pendidikan Pancasila Kemdikbud", kelas: 1, mapel: "Pendidikan Pancasila",
           bab: "Bab 7: Mengenal Bagian Rumah, Tetangga & Denah Sederhana",
           deskripsi: "Mengenal fungsi ruangan di rumah, sikap bertetangga yang baik, dan membaca arah kanan-kiri-depan-belakang pada denah.",
           ringkasan_intro: "Rumah adalah tempat tinggal kita bersama keluarga. Di sekitar rumah kita ada tetangga yang harus kita hormati dan sapa dengan ramah saat bertemu.",
           poin_penting: [
-            {
-              judul: "Bagian-Bagian Rumah & Fungsinya",
-              isi: "Ruang tamu (menerima tamu), kamar tidur (beristirahat), dapur (memasak makanan), kamar mandi (membersihkan badan), dan halaman (bermain & menanam bunga)."
-            },
-            {
-              judul: "Hidup Rukun dengan Tetangga",
-              isi: "Tetangga adalah orang yang rumahnya dekat dengan rumah kita. Sapa tetangga dengan senyuman dan tidak menyalakan suara keras yang mengganggu."
-            }
+            { judul: "Bagian-Bagian Rumah & Fungsinya", isi: "Ruang tamu (menerima tamu), kamar tidur (beristirahat), dapur (memasak makanan), kamar mandi (membersihkan badan), dan halaman (bermain & menanam bunga)." },
+            { judul: "Hidup Rukun dengan Tetangga", isi: "Tetangga adalah orang yang rumahnya dekat dengan rumah kita. Sapa tetangga dengan senyuman dan tidak menyalakan suara keras yang mengganggu." }
           ],
           cara_biasa_judul: "Cara Biasa (Menggambar Denah Rumah)",
-          cara_biasa_langkah: [
-            "Menggambar kotak rumah dan menuliskan nama jalan serta bangunan di sebelah kanan dan kirinya."
-          ],
+          cara_biasa_langkah: ["Menggambar kotak rumah dan menuliskan nama jalan serta bangunan di sebelah kanan dan kirinya."],
           cara_cepat_judul: "Trik Jitu: 'Ingat Arah Hadap Rumahmu di Denah!' ⚡",
-          cara_cepat_langkah: [
-            "Bayangkan kamu berdiri di depan pintu rumah: Tangan kananmu = Sebelah Kanan | Tangan kirimu = Sebelah Kiri!"
-          ],
+          cara_cepat_langkah: ["Bayangkan kamu berdiri di depan pintu rumah: Tangan kananmu = Sebelah Kanan | Tangan kirimu = Sebelah Kiri!"],
           visual_type: "pancasila_house_map",
           visual_caption: "Ketuk setiap bagian rumah & tetangga di atas untuk mengenal fungsi dan sikap baiknya!",
           video_judul: "Pendidikan Pancasila Kelas 1: Mengenal Lingkungan Rumah & Tetangga",
@@ -665,32 +599,18 @@
           video_url: "https://www.youtube.com/results?search_query=mengenal+lingkungan+rumah+dan+tetangga+kelas+1+sd"
         },
         {
-          id: "PPKN-S2-04",
-          semester: 2,
-          kurikulum: "Buku Pendidikan Pancasila Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Pancasila",
+          id: "PPKN-S2-04", semester: 2, kurikulum: "Buku Pendidikan Pancasila Kemdikbud", kelas: 1, mapel: "Pendidikan Pancasila",
           bab: "Bab 8: Menjaga Kelestarian Lingkungan Alam & Hemat Energi",
           deskripsi: "Membiasakan membuang sampah pada tempatnya, merawat tanaman, serta menghemat air dan listrik di rumah.",
           ringkasan_intro: "Lingkungan yang bersih membuat kita sehat dan nyaman belajar. Kita wajib menjaga lingkungan dengan membuang sampah sesuai jenisnya dan menghemat energi.",
           poin_penting: [
-            {
-              judul: "Memilah Sampah Organik & Anorganik",
-              isi: "Sampah organik (daun kering, sisa buah/sayur) bisa menjadi pupuk kompos. Sampah anorganik (botol plastik, kaleng, kertas) bisa didaur ulang."
-            },
-            {
-              judul: "Cara Menghemat Air & Listrik",
-              isi: "Matikan keran air setelah selesai cuci tangan/wudu, dan matikan lampu atau kipas angin saat meninggalkan ruangan."
-            }
+            { judul: "Memilah Sampah Organik & Anorganik", isi: "Sampah organik (daun kering, sisa buah/sayur) bisa menjadi pupuk kompos. Sampah anorganik (botol plastik, kaleng, kertas) bisa didaur ulang." },
+            { judul: "Cara Menghemat Air & Listrik", isi: "Matikan keran air setelah selesai cuci tangan/wudu, dan matikan lampu atau kipas angin saat meninggalkan ruangan." }
           ],
           cara_biasa_judul: "Cara Biasa (Membaca Poster Kebersihan)",
-          cara_biasa_langkah: [
-            "Membaca ajakan menjaga kebersihan sekolah dan rumah di buku siswa."
-          ],
+          cara_biasa_langkah: ["Membaca ajakan menjaga kebersihan sekolah dan rumah di buku siswa."],
           cara_cepat_judul: "Trik Jitu: '3M Hemat & Bersih: Matikan Lampu, Matikan Keran, Masukkan Sampah!' ⚡",
-          cara_cepat_langkah: [
-            "Lihat sampah → pungut & buang ke tong sampah! Selesai pakai air/lampu → langsung matikan!"
-          ],
+          cara_cepat_langkah: ["Lihat sampah → pungut & buang ke tong sampah! Selesai pakai air/lampu → langsung matikan!"],
           visual_type: "pancasila_gotong_royong",
           visual_caption: "Ketuk contoh kegiatan menjaga kebersihan dan kerja sama di atas!",
           video_judul: "Pendidikan Pancasila Kelas 1: Menjaga Kebersihan Lingkungan",
@@ -698,15 +618,9 @@
           video_url: "https://www.youtube.com/results?search_query=menjaga+kebersihan+lingkungan+kelas+1+sd"
         },
 
-        // =================================================================
-        // MATEMATIKA BAB 1–8 (SEMESTER 1 & 2)
-        // =================================================================
+        // MATEMATIKA (8 BAB)
         {
-          id: "MAT-S1-01",
-          semester: 1,
-          kurikulum: "Buku Matematika Kemdikbud",
-          kelas: 1,
-          mapel: "Matematika",
+          id: "MAT-S1-01", semester: 1, kurikulum: "Buku Matematika Kemdikbud", kelas: 1, mapel: "Matematika",
           bab: "Bab 1: Ayo Membilang Sampai dengan 10",
           deskripsi: "Menghitung banyak benda 1–10, membaca lambang bilangan, serta membandingkan lebih banyak dan lebih sedikit.",
           ringkasan_intro: "Di Bab 1 Matematika Kelas 1, kita belajar membilang banyak benda dari 1 sampai 10, mengenal angka 0 (nol = kosong), serta membandingkan dua kelompok benda.",
@@ -725,11 +639,7 @@
           video_url: "https://www.youtube.com/results?search_query=matematika+kelas+1+bab+1+membilang+sampai+10"
         },
         {
-          id: "MAT-S1-02",
-          semester: 1,
-          kurikulum: "Buku Matematika Kemdikbud",
-          kelas: 1,
-          mapel: "Matematika",
+          id: "MAT-S1-02", semester: 1, kurikulum: "Buku Matematika Kemdikbud", kelas: 1, mapel: "Matematika",
           bab: "Bab 2: Penjumlahan Sampai dengan 10",
           deskripsi: "Memahami arti menggabungkan benda (+), tanda sama dengan (=), dan pasangan bilangan pembuat 10.",
           ringkasan_intro: "Penjumlahan berarti menggabungkan dua kelompok benda sehingga jumlahnya bertambah banyak. Simbol tambah adalah (+).",
@@ -747,11 +657,7 @@
           video_url: "https://www.youtube.com/results?search_query=matematika+kelas+1+bab+2+penjumlahan+sampai+10"
         },
         {
-          id: "MAT-S1-03",
-          semester: 1,
-          kurikulum: "Buku Matematika Kemdikbud",
-          kelas: 1,
-          mapel: "Matematika",
+          id: "MAT-S1-03", semester: 1, kurikulum: "Buku Matematika Kemdikbud", kelas: 1, mapel: "Matematika",
           bab: "Bab 3: Pengurangan Sampai dengan 10",
           deskripsi: "Memahami arti mengambil/mengurangi benda (-), menghitung mundur, dan mencari selisih benda.",
           ringkasan_intro: "Pengurangan berarti mengambil sebagian benda sehingga sisanya menjadi lebih sedikit. Simbol kurang adalah (-).",
@@ -769,11 +675,7 @@
           video_url: "https://www.youtube.com/results?search_query=matematika+kelas+1+bab+3+pengurangan+sampai+10"
         },
         {
-          id: "MAT-S1-04",
-          semester: 1,
-          kurikulum: "Buku Matematika Kemdikbud",
-          kelas: 1,
-          mapel: "Matematika",
+          id: "MAT-S1-04", semester: 1, kurikulum: "Buku Matematika Kemdikbud", kelas: 1, mapel: "Matematika",
           bab: "Bab 4: Mengenal Bentuk (Segitiga, Segiempat, Lingkaran)",
           deskripsi: "Mengelompokkan benda berdasarkan bentuk segitiga, segiempat, dan lengkung/lingkaran.",
           ringkasan_intro: "Di Bab 4, kita mengamati bentuk benda di sekitar: segitiga memiliki 3 sisi, segiempat memiliki 4 sisi, dan lingkaran memiliki 1 sisi lengkung tanpa sudut.",
@@ -791,11 +693,7 @@
           video_url: "https://www.youtube.com/results?search_query=matematika+kelas+1+bab+4+mengenal+bentuk"
         },
         {
-          id: "MAT-S2-01",
-          semester: 2,
-          kurikulum: "Buku Matematika Kemdikbud",
-          kelas: 1,
-          mapel: "Matematika",
+          id: "MAT-S2-01", semester: 2, kurikulum: "Buku Matematika Kemdikbud", kelas: 1, mapel: "Matematika",
           bab: "Bab 5: Ayo Membilang Sampai dengan 20 (Nilai Tempat)",
           deskripsi: "Mengenal bilangan 11–20 serta nilai tempat Puluhan dan Satuan.",
           ringkasan_intro: "Di Bab 5 Semester 2, kita belajar bilangan 11 sampai 20 dengan cara mengelompokkan 10 benda menjadi 1 Puluhan ditambah sisanya sebagai Satuan.",
@@ -813,11 +711,7 @@
           video_url: "https://www.youtube.com/results?search_query=matematika+kelas+1+bab+5+membilang+sampai+20"
         },
         {
-          id: "MAT-S2-02",
-          semester: 2,
-          kurikulum: "Buku Matematika Kemdikbud",
-          kelas: 1,
-          mapel: "Matematika",
+          id: "MAT-S2-02", semester: 2, kurikulum: "Buku Matematika Kemdikbud", kelas: 1, mapel: "Matematika",
           bab: "Bab 6: Penjumlahan & Pengurangan Sampai 20",
           deskripsi: "Menghitung penjumlahan melewati 10 (seperti 8 + 5) dan pengurangan belasan (seperti 14 - 6).",
           ringkasan_intro: "Di Bab 6, kita belajar teknik membuat pasangan 10 terlebih dahulu agar penjumlahan dan pengurangan belasan terasa sangat mudah.",
@@ -835,11 +729,7 @@
           video_url: "https://www.youtube.com/results?search_query=matematika+kelas+1+bab+6+penjumlahan+dan+pengurangan+sampai+20"
         },
         {
-          id: "MAT-S2-03",
-          semester: 2,
-          kurikulum: "Buku Matematika Kemdikbud",
-          kelas: 1,
-          mapel: "Matematika",
+          id: "MAT-S2-03", semester: 2, kurikulum: "Buku Matematika Kemdikbud", kelas: 1, mapel: "Matematika",
           bab: "Bab 7: Mengukur Panjang Benda (Satuan Tidak Baku)",
           deskripsi: "Membandingkan panjang benda (lebih panjang/pendek) dan mengukur memakai jengkal, depa, dan klip kertas.",
           ringkasan_intro: "Di Bab 7, kita belajar membandingkan panjang benda serta mengukur panjang memakai anggota tubuh (jengkal, depa, langkah) dan benda kecil (klip kertas, korek api).",
@@ -857,11 +747,7 @@
           video_url: "https://www.youtube.com/results?search_query=matematika+kelas+1+bab+7+mengukur+panjang+benda"
         },
         {
-          id: "MAT-S2-04",
-          semester: 2,
-          kurikulum: "Buku Matematika Kemdikbud",
-          kelas: 1,
-          mapel: "Matematika",
+          id: "MAT-S2-04", semester: 2, kurikulum: "Buku Matematika Kemdikbud", kelas: 1, mapel: "Matematika",
           bab: "Bab 8: Mengenal Diagram Gambar (Piktogram)",
           deskripsi: "Mengelompokkan data benda dan membaca diagram gambar untuk mengetahui jumlah terbanyak dan tersedikit.",
           ringkasan_intro: "Di Bab 8 (Penutup Semester 2), kita belajar menyajikan data dalam bentuk Diagram Gambar agar mudah melihat benda mana yang paling banyak dan paling sedikit.",
@@ -879,15 +765,9 @@
           video_url: "https://www.youtube.com/results?search_query=matematika+kelas+1+bab+8+mengenal+diagram"
         },
 
-        // =================================================================
-        // JARIMATIKA LEVEL 1–8 (SEMESTER 1 & 2)
-        // =================================================================
+        // JARIMATIKA (8 BAB)
         {
-          id: "JAR-S1-01",
-          semester: 1,
-          kurikulum: "Metode Jarimatika Dasar",
-          kelas: 1,
-          mapel: "Jarimatika",
+          id: "JAR-S1-01", semester: 1, kurikulum: "Metode Jarimatika Dasar", kelas: 1, mapel: "Jarimatika",
           bab: "Level 1: Formasi Angka 1–9 di Tangan Kanan (Satuan)",
           deskripsi: "Mengenal posisi jari tangan kanan sebagai satuan: Telunjuk–Kelingking bernilai 1, Jempol bernilai 5.",
           ringkasan_intro: "Dalam Jarimatika, Tangan Kanan melambangkan angka Satuan (1 sampai 9). Cukup menggunakan 1 tangan saja untuk menghitung sampai 9!",
@@ -905,11 +785,7 @@
           video_url: "https://www.youtube.com/results?search_query=jarimatika+dasar+mengenal+angka+1+sampai+9"
         },
         {
-          id: "JAR-S1-02",
-          semester: 1,
-          kurikulum: "Metode Jarimatika Dasar",
-          kelas: 1,
-          mapel: "Jarimatika",
+          id: "JAR-S1-02", semester: 1, kurikulum: "Metode Jarimatika Dasar", kelas: 1, mapel: "Jarimatika",
           bab: "Level 2: Tambah & Kurang Beruntun Langsung (1–9)",
           deskripsi: "Berhitung cepat tambah dan kurang beruntun memakai buka-tutup jari tangan kanan.",
           ringkasan_intro: "Setelah hafal posisi 1–9, tanda TAMBAH (+) berarti membuka jari, sedangkan tanda KURANG (-) berarti melipat/menutup jari.",
@@ -927,11 +803,7 @@
           video_url: "https://www.youtube.com/results?search_query=jarimatika+tambah+kurang+sederhana+kelas+1"
         },
         {
-          id: "JAR-S1-03",
-          semester: 1,
-          kurikulum: "Metode Jarimatika Menengah",
-          kelas: 1,
-          mapel: "Jarimatika",
+          id: "JAR-S1-03", semester: 1, kurikulum: "Metode Jarimatika Menengah", kelas: 1, mapel: "Jarimatika",
           bab: "Level 3: Teknik 'Teman Kecil 5' (Jempol Sakti)",
           deskripsi: "Menyelesaikan hitungan seperti 3 + 4 atau 6 - 2 saat jari biasa sudah penuh.",
           ringkasan_intro: "Saat ingin menambah 1, 2, 3, atau 4 tetapi jari biasa tidak cukup sementara Jempol (5) masih tertutup, gunakan rumus Teman Kecil 5!",
@@ -949,11 +821,7 @@
           video_url: "https://www.youtube.com/results?search_query=jarimatika+teman+kecil+5+untuk+anak+sd"
         },
         {
-          id: "JAR-S2-01",
-          semester: 2,
-          kurikulum: "Metode Jarimatika Dasar",
-          kelas: 1,
-          mapel: "Jarimatika",
+          id: "JAR-S2-01", semester: 2, kurikulum: "Metode Jarimatika Dasar", kelas: 1, mapel: "Jarimatika",
           bab: "Level 4: Jarimatika Puluhan 10–90 di Tangan Kiri",
           deskripsi: "Menggunakan tangan kiri untuk menghitung puluhan 10 sampai 90 dengan cepat.",
           ringkasan_intro: "Tangan Kiri adalah kembaran Tangan Kanan, bedanya setiap jari bernilai PULUHAN: Telunjuk = 10, Jempol = 50, semua jari = 90.",
@@ -971,11 +839,7 @@
           video_url: "https://www.youtube.com/results?search_query=jarimatika+puluhan+10+sampai+90"
         },
         {
-          id: "JAR-S2-02",
-          semester: 2,
-          kurikulum: "Metode Jarimatika Menengah",
-          kelas: 1,
-          mapel: "Jarimatika",
+          id: "JAR-S2-02", semester: 2, kurikulum: "Metode Jarimatika Menengah", kelas: 1, mapel: "Jarimatika",
           bab: "Level 5: Kombinasi Dua Tangan (Angka 11–99)",
           deskripsi: "Menggabungkan tangan kiri (puluhan) dan tangan kanan (satuan) untuk menghitung angka dua digit.",
           ringkasan_intro: "Dengan menggabungkan Tangan Kiri (Puluhan) dan Tangan Kanan (Satuan), kita bisa menampilkan dan menghitung semua angka dari 11 sampai 99!",
@@ -993,11 +857,7 @@
           video_url: "https://www.youtube.com/results?search_query=jarimatika+puluhan+dan+satuan+11+sampai+99"
         },
         {
-          id: "JAR-S2-03",
-          semester: 2,
-          kurikulum: "Metode Jarimatika Lanjutan",
-          kelas: 1,
-          mapel: "Jarimatika",
+          id: "JAR-S2-03", semester: 2, kurikulum: "Metode Jarimatika Lanjutan", kelas: 1, mapel: "Jarimatika",
           bab: "Level 6: Teknik 'Sahabat Besar 10' (Melewati Puluhan)",
           deskripsi: "Menghitung penjumlahan dan pengurangan melewati 10 seperti 8 + 5 atau 13 - 5.",
           ringkasan_intro: "Saat jari satuan di tangan kanan sudah penuh, gunakan Sahabat Besar 10 dengan meminjam/menambah 10 di tangan kiri!",
@@ -1015,11 +875,7 @@
           video_url: "https://www.youtube.com/results?search_query=jarimatika+sahabat+besar+10"
         },
         {
-          id: "JAR-S2-04",
-          semester: 2,
-          kurikulum: "Metode Jarimatika Lanjutan",
-          kelas: 1,
-          mapel: "Jarimatika",
+          id: "JAR-S2-04", semester: 2, kurikulum: "Metode Jarimatika Lanjutan", kelas: 1, mapel: "Jarimatika",
           bab: "Level 7: Jarimatika Perkalian Cepat (Perkalian 9 & 6–10)",
           deskripsi: "Menghitung perkalian 9 hanya dengan melipat 1 jari, serta perkalian 6–10 menggunakan dua tangan.",
           ringkasan_intro: "Perkalian 9 di Jarimatika sangat ajaib! Bentangkan ke-10 jarimu, lipat 1 jari sesuai angka pengalinya: jari di kiri menjadi PULUHAN, jari di kanan menjadi SATUAN.",
@@ -1038,11 +894,7 @@
           video_url: "https://www.youtube.com/results?search_query=jarimatika+perkalian+9+dan+6+sampai+10"
         },
         {
-          id: "JAR-S2-05",
-          semester: 2,
-          kurikulum: "Metode Jarimatika Lanjutan",
-          kelas: 1,
-          mapel: "Jarimatika",
+          id: "JAR-S2-05", semester: 2, kurikulum: "Metode Jarimatika Lanjutan", kelas: 1, mapel: "Jarimatika",
           bab: "Level 8: Jarimatika Pembagian Cepat (Bagi 9 & Kelompok Jari)",
           deskripsi: "Menyelesaikan pembagian angka kelipatan 9 (seperti 36 ÷ 9 atau 72 ÷ 9) secara terbalik dalam 2 detik.",
           ringkasan_intro: "Pembagian adalah kebalikan dari perkalian. Untuk pembagian 9, pisahkan ke-10 jarimu sesuai digit puluhan dan satuan, maka jari pembatas di tengah itulah jawabannya!",
@@ -1060,21 +912,13 @@
           video_url: "https://www.youtube.com/results?search_query=jarimatika+pembagian+cepat+anak+sd"
         },
 
-        // =================================================================
-        // BAHASA INDONESIA BAB 1–8 (SEMESTER 1 & 2)
-        // =================================================================
+        // BAHASA INDONESIA (8 BAB)
         {
-          id: "BIN-S1-01",
-          semester: 1,
-          kurikulum: "Buku Bahasa Indonesia Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Indonesia",
+          id: "BIN-S1-01", semester: 1, kurikulum: "Buku Bahasa Indonesia Kemdikbud", kelas: 1, mapel: "Bahasa Indonesia",
           bab: "Bab 1: Bunyi Apa? (Huruf Abjad & Suku Kata 'ba-bi-bu-be-bo')",
           deskripsi: "Mengenal huruf vokal, konsonan, bunyi benda di sekitar, dan merangkai suku kata berawalan 'b'.",
           ringkasan_intro: "Di Bab 1 Buku Aku Bisa!, kita mengenal 5 huruf vokal (a, i, u, e, o), membedakan bunyi pelan dan keras, serta membaca kata berawalan 'ba-bi-bu-be-bo'.",
-          poin_penting: [
-            { judul: "5 Huruf Vokal & Suku Kata 'b'", isi: "Huruf vokal: A, I, U, E, O. Contoh kata awalan b: ba-ju, bi-ru, bu-ku, be-bek, bo-la." }
-          ],
+          poin_penting: [{ judul: "5 Huruf Vokal & Suku Kata 'b'", isi: "Huruf vokal: A, I, U, E, O. Contoh kata awalan b: ba-ju, bi-ru, bu-ku, be-bek, bo-la." }],
           cara_biasa_judul: "Cara Biasa (Mengeja per Huruf)",
           cara_biasa_langkah: ["Mengeja B - O - L - A."],
           cara_cepat_judul: "Trik Jitu: 'Tepuk Suku Kata!' ⚡",
@@ -1086,17 +930,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+indonesia+kelas+1+bab+1+bunyi+apa"
         },
         {
-          id: "BIN-S1-02",
-          semester: 1,
-          kurikulum: "Buku Bahasa Indonesia Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Indonesia",
+          id: "BIN-S1-02", semester: 1, kurikulum: "Buku Bahasa Indonesia Kemdikbud", kelas: 1, mapel: "Bahasa Indonesia",
           bab: "Bab 2: Ayo Bermain! (Tanda Tanya '?' & Tanda Seru '!')",
           deskripsi: "Membedakan kalimat tanya (?) dan kalimat perintah/larangan (!), serta suku kata 'ha-hi-hu-he-ho' & 'c'.",
           ringkasan_intro: "Di Bab 2, kita belajar menggunakan tanda tanya (?) untuk bertanya dan tanda seru (!) untuk mengajak atau melarang dengan sopan.",
-          poin_penting: [
-            { judul: "Tanda Tanya (?) vs Tanda Seru (!)", isi: "Tanda Tanya (?): 'Siapa namamu?' | Tanda Seru (!): 'Ayo kita bermain!' atau 'Jangan berlari di tangga!'" }
-          ],
+          poin_penting: [{ judul: "Tanda Tanya (?) vs Tanda Seru (!)", isi: "Tanda Tanya (?): 'Siapa namamu?' | Tanda Seru (!): 'Ayo kita bermain!' atau 'Jangan berlari di tangga!'" }],
           cara_biasa_judul: "Cara Biasa (Membaca Dialog)",
           cara_biasa_langkah: ["Membaca percakapan anak di taman bermain."],
           cara_cepat_judul: "Trik Jitu: 'Nanya Pakai (?), Nyuruh/Ngajak Pakai (!)!' ⚡",
@@ -1108,17 +946,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+indonesia+kelas+1+bab+2+ayo+bermain"
         },
         {
-          id: "BIN-S1-03",
-          semester: 1,
-          kurikulum: "Buku Bahasa Indonesia Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Indonesia",
+          id: "BIN-S1-03", semester: 1, kurikulum: "Buku Bahasa Indonesia Kemdikbud", kelas: 1, mapel: "Bahasa Indonesia",
           bab: "Bab 3: Awas Kuman! (Suku Kata 'ka-ki-ku-ke-ko' & Kebersihan)",
           deskripsi: "Menjaga kebersihan diri dari kuman dengan mencuci tangan serta membaca kata 'ka-ki-ku-ke-ko'.",
           ringkasan_intro: "Di Bab 3, kita belajar bahwa kuman tidak terlihat mata tetapi bisa membuat sakit perut jika kita lupa mencuci tangan dengan sabun.",
-          poin_penting: [
-            { judul: "Suku Kata 'ka-ki-ku-ke-ko'", isi: "ka-ki, ki-pas, ku-man, ke-las, ko-tor." }
-          ],
+          poin_penting: [{ judul: "Suku Kata 'ka-ki-ku-ke-ko'", isi: "ka-ki, ki-pas, ku-man, ke-las, ko-tor." }],
           cara_biasa_judul: "Cara Biasa (Membaca Cerita Dilo)",
           cara_biasa_langkah: ["Membaca cerita tentang pentingnya mencuci tangan."],
           cara_cepat_judul: "Trik Jitu: 'Cuci Tangan Sebelum Makan & Setelah Main!' ⚡",
@@ -1130,17 +962,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+indonesia+kelas+1+bab+3+awas+kuman"
         },
         {
-          id: "BIN-S1-04",
-          semester: 1,
-          kurikulum: "Buku Bahasa Indonesia Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Indonesia",
+          id: "BIN-S1-04", semester: 1, kurikulum: "Buku Bahasa Indonesia Kemdikbud", kelas: 1, mapel: "Bahasa Indonesia",
           bab: "Bab 4: Aku Bisa! (Gerak Hewan & Suku Kata 'la-li-lu-le-lo')",
           deskripsi: "Mengenal cara bergerak berbagai hewan (melompat, berenang, terbang) dan suku kata awalan 'l'.",
           ringkasan_intro: "Di Bab 4, kita mengenal beragam cara hewan bergerak: kelinci melompat, ikan berenang, burung terbang, dan ular melata.",
-          poin_penting: [
-            { judul: "Suku Kata 'la-li-lu-le-lo'", isi: "la-ri, li-hat, lu-cu, le-bah, lom-pat." }
-          ],
+          poin_penting: [{ judul: "Suku Kata 'la-li-lu-le-lo'", isi: "la-ri, li-hat, lu-cu, le-bah, lom-pat." }],
           cara_biasa_judul: "Cara Biasa (Menirukan Gerak Hewan)",
           cara_biasa_langkah: ["Membaca daftar nama hewan dan cara bergeraknya."],
           cara_cepat_judul: "Trik Jitu: 'Peragakan Geraknya Sambil Ucapkan Suku Katanya!' ⚡",
@@ -1152,17 +978,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+indonesia+kelas+1+bab+4+aku+bisa"
         },
         {
-          id: "BIN-S2-01",
-          semester: 2,
-          kurikulum: "Buku Bahasa Indonesia Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Indonesia",
+          id: "BIN-S2-01", semester: 2, kurikulum: "Buku Bahasa Indonesia Kemdikbud", kelas: 1, mapel: "Bahasa Indonesia",
           bab: "Bab 5: Teman Baru (4 Kata Ajaib & Suku Kata 'ma-mi-mu-me-mo')",
           deskripsi: "Membiasakan 4 kata ajaib (Tolong, Terima Kasih, Maaf, Permisi) dan tanda titik (.).",
           ringkasan_intro: "Di Bab 5 Semester 2, kita belajar sopan santun berteman dengan membiasakan 4 Kata Ajaib dan mengakhiri kalimat berita dengan tanda titik (.).",
-          poin_penting: [
-            { judul: "4 Kata Ajaib", isi: "1. Tolong (minta bantuan) • 2. Terima kasih (dibantu) • 3. Maaf (berbuat salah) • 4. Permisi (lewat di depan orang)." }
-          ],
+          poin_penting: [{ judul: "4 Kata Ajaib", isi: "1. Tolong (minta bantuan) • 2. Terima kasih (dibantu) • 3. Maaf (berbuat salah) • 4. Permisi (lewat di depan orang)." }],
           cara_biasa_judul: "Cara Biasa (Membaca Dialog Berteman)",
           cara_biasa_langkah: ["Membaca cerita perkenalan Mimi dan Maya."],
           cara_cepat_judul: "Trik Jitu: 'Ingat 4 Kata Ajaib: To - Te - Ma - Per!' ⚡",
@@ -1174,17 +994,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+indonesia+kelas+1+bab+5+teman+baru"
         },
         {
-          id: "BIN-S2-02",
-          semester: 2,
-          kurikulum: "Buku Bahasa Indonesia Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Indonesia",
+          id: "BIN-S2-02", semester: 2, kurikulum: "Buku Bahasa Indonesia Kemdikbud", kelas: 1, mapel: "Bahasa Indonesia",
           bab: "Bab 6: Berbeda Itu Tak Apa (Suku Kata 'ga-gi-gu-ge-go')",
           deskripsi: "Menghargai perbedaan kesukaan teman dan membaca suku kata berawalan 'g'.",
           ringkasan_intro: "Di Bab 6, kita belajar bahwa setiap teman punya kesukaan dan sifat berbeda, tetapi kita tetap bisa bermain rukun bersama.",
-          poin_penting: [
-            { judul: "Suku Kata 'ga-gi-gu-ge-go'", isi: "ga-jah, gi-gi, gu-la, ge-las, go-reng." }
-          ],
+          poin_penting: [{ judul: "Suku Kata 'ga-gi-gu-ge-go'", isi: "ga-jah, gi-gi, gu-la, ge-las, go-reng." }],
           cara_biasa_judul: "Cara Biasa (Membaca Cerita Kiki & Gaga)",
           cara_biasa_langkah: ["Membaca perbedaan kesukaan dua sahabat di cerita."],
           cara_cepat_judul: "Trik Jitu: 'Beda Kesukaan = Tetap Rukun Berteman!' ⚡",
@@ -1196,17 +1010,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+indonesia+kelas+1+bab+6+berbeda+itu+tak+apa"
         },
         {
-          id: "BIN-S2-03",
-          semester: 2,
-          kurikulum: "Buku Bahasa Indonesia Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Indonesia",
+          id: "BIN-S2-03", semester: 2, kurikulum: "Buku Bahasa Indonesia Kemdikbud", kelas: 1, mapel: "Bahasa Indonesia",
           bab: "Bab 7: Aku Ingin (Kebutuhan vs Keinginan & Menabung)",
           deskripsi: "Membedakan kebutuhan pokok dan keinginan serta membiasakan menabung uang saku.",
           ringkasan_intro: "Di Bab 7, kita belajar membedakan Kebutuhan (harus dipenuhi agar sehat & bisa belajar, seperti makanan dan buku) dengan Keinginan (bisa ditunda, seperti mainan mahal).",
-          poin_penting: [
-            { judul: "Kebutuhan vs Keinginan", isi: "Kebutuhan: makanan sehat, air minum, seragam, pensil. Keinginan: mainan baru, permen berlebihan." }
-          ],
+          poin_penting: [{ judul: "Kebutuhan vs Keinginan", isi: "Kebutuhan: makanan sehat, air minum, seragam, pensil. Keinginan: mainan baru, permen berlebihan." }],
           cara_biasa_judul: "Cara Biasa (Mengelompokkan Gambar Belanja)",
           cara_biasa_langkah: ["Memisahkan gambar makanan bergizi dan mainan."],
           cara_cepat_judul: "Trik Jitu: 'Dahulukan KEBUTUHAN, Tabung Sisa Uang!' ⚡",
@@ -1218,17 +1026,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+indonesia+kelas+1+bab+7+aku+ingin"
         },
         {
-          id: "BIN-S2-04",
-          semester: 2,
-          kurikulum: "Buku Bahasa Indonesia Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Indonesia",
+          id: "BIN-S2-04", semester: 2, kurikulum: "Buku Bahasa Indonesia Kemdikbud", kelas: 1, mapel: "Bahasa Indonesia",
           bab: "Bab 8: Di Sekitar Rumah (Arah Letak & Aturan 4T Menyeberang)",
           deskripsi: "Mengenal kata letak (kanan, kiri, depan, belakang) dan aturan aman 4T saat menyeberang jalan.",
           ringkasan_intro: "Di Bab 8 (Penutup Semester 2), kita belajar menunjukkan arah kanan-kiri-depan-belakang serta menjaga keselamatan di jalan raya dengan aturan 4T.",
-          poin_penting: [
-            { judul: "Aturan 4T Menyeberang Jalan", isi: "1. Tunggu sebentar • 2. Tengok kanan • 3. Tengok kiri • 4. Tengok kanan lagi, baru menyeberang di zebra cross!" }
-          ],
+          poin_penting: [{ judul: "Aturan 4T Menyeberang Jalan", isi: "1. Tunggu sebentar • 2. Tengok kanan • 3. Tengok kiri • 4. Tengok kanan lagi, baru menyeberang di zebra cross!" }],
           cara_biasa_judul: "Cara Biasa (Membaca Peta Lingkungan)",
           cara_biasa_langkah: ["Melihat letak rumah, sekolah, dan tempat ibadah di peta."],
           cara_cepat_judul: "Trik Jitu: '4T: Tunggu - Tengok Kanan - Tengok Kiri - Tengok Kanan Lagi!' ⚡",
@@ -1240,21 +1042,13 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+indonesia+kelas+1+bab+8+di+sekitar+rumah"
         },
 
-        // =================================================================
-        // PENDIDIKAN AGAMA ISLAM (PAI) BAB 1–10 (SEMESTER 1 & 2)
-        // =================================================================
+        // PAI (10 BAB)
         {
-          id: "PAI-S1-01",
-          semester: 1,
-          kurikulum: "Buku PAI Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Agama Islam",
+          id: "PAI-S1-01", semester: 1, kurikulum: "Buku PAI Kemdikbud", kelas: 1, mapel: "Pendidikan Agama Islam",
           bab: "Bab 1: Aku Cinta Al-Qur'an (Hijaiyah, Harakat & Surah Al-Fatihah)",
           deskripsi: "Mengenal 29 huruf Hijaiyah, tanda baca harakat (Fathah, Kasrah, Dammah), dan Surah Al-Fatihah.",
           ringkasan_intro: "Al-Qur'an adalah kitab suci umat Islam yang ditulis dengan huruf Hijaiyah dari arah kanan ke kiri. Surah pembuka Al-Qur'an adalah Al-Fatihah (7 ayat).",
-          poin_penting: [
-            { judul: "3 Harakat Dasar", isi: "Fathah (garis di atas = bunyi 'a'), Kasrah (garis di bawah = bunyi 'i'), Dammah (seperti koma di atas = bunyi 'u')." }
-          ],
+          poin_penting: [{ judul: "3 Harakat Dasar", isi: "Fathah (garis di atas = bunyi 'a'), Kasrah (garis di bawah = bunyi 'i'), Dammah (seperti koma di atas = bunyi 'u')." }],
           cara_biasa_judul: "Cara Biasa (Membaca Buku Iqra)",
           cara_biasa_langkah: ["Membaca baris huruf Hijaiyah satu per satu."],
           cara_cepat_judul: "Trik Jitu: 'Atas = A, Bawah = I, Depan = U!' ⚡",
@@ -1266,17 +1060,11 @@
           video_url: "https://www.youtube.com/results?search_query=pai+kelas+1+bab+1+aku+cinta+al+quran"
         },
         {
-          id: "PAI-S1-02",
-          semester: 1,
-          kurikulum: "Buku PAI Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Agama Islam",
+          id: "PAI-S1-02", semester: 1, kurikulum: "Buku PAI Kemdikbud", kelas: 1, mapel: "Pendidikan Agama Islam",
           bab: "Bab 2: Mengenal Rukun Iman (6 Rukun Iman)",
           deskripsi: "Menghafal 6 Rukun Iman secara berurutan dan meyakini Allah Swt. sebagai Pencipta alam semesta.",
           ringkasan_intro: "Iman artinya percaya dengan sepenuh hati. Rukun Iman ada 6 perkara yang wajib diyakini setiap muslim.",
-          poin_penting: [
-            { judul: "6 Rukun Iman", isi: "1. Iman kepada Allah • 2. Malaikat • 3. Kitab-kitab Allah • 4. Nabi dan Rasul • 5. Hari Kiamat • 6. Qada dan Qadar." }
-          ],
+          poin_penting: [{ judul: "6 Rukun Iman", isi: "1. Iman kepada Allah • 2. Malaikat • 3. Kitab-kitab Allah • 4. Nabi dan Rasul • 5. Hari Kiamat • 6. Qada dan Qadar." }],
           cara_biasa_judul: "Cara Biasa (Membaca Urutan 1–6)",
           cara_biasa_langkah: ["Membaca teks 6 Rukun Iman di buku pelajaran."],
           cara_cepat_judul: "Trik Jitu: 'A - Ma - Ki - Ra - Ki - Qa!' ⚡",
@@ -1288,17 +1076,11 @@
           video_url: "https://www.youtube.com/results?search_query=pai+kelas+1+bab+2+mengenal+rukun+iman"
         },
         {
-          id: "PAI-S1-03",
-          semester: 1,
-          kurikulum: "Buku PAI Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Agama Islam",
+          id: "PAI-S1-03", semester: 1, kurikulum: "Buku PAI Kemdikbud", kelas: 1, mapel: "Pendidikan Agama Islam",
           bab: "Bab 3: Aku Suka Membaca Basmalah dan Hamdalah",
           deskripsi: "Membiasakan bacaan Basmalah sebelum beraktivitas dan Hamdalah setelah selesai beraktivitas.",
           ringkasan_intro: "Sebelum melakukan kegiatan baik kita membaca Basmalah (Bismillahirrahmanirrahim), dan setelah selesai kita membaca Hamdalah (Alhamdulillahi rabbil 'alamin).",
-          poin_penting: [
-            { judul: "Arti Basmalah & Hamdalah", isi: "Basmalah: 'Dengan menyebut nama Allah Yang Maha Pengasih, Maha Penyayang'. Hamdalah: 'Segala puji bagi Allah Tuhan semesta alam'." }
-          ],
+          poin_penting: [{ judul: "Arti Basmalah & Hamdalah", isi: "Basmalah: 'Dengan menyebut nama Allah Yang Maha Pengasih, Maha Penyayang'. Hamdalah: 'Segala puji bagi Allah Tuhan semesta alam'." }],
           cara_biasa_judul: "Cara Biasa (Menghafal Lafal Arab)",
           cara_biasa_langkah: ["Menirukan bacaan guru."],
           cara_cepat_judul: "Trik Jitu: 'Mulai = BISMILLAH, Selesai = ALHAMDULILLAH!' ⚡",
@@ -1310,17 +1092,11 @@
           video_url: "https://www.youtube.com/results?search_query=pai+kelas+1+bab+3+basmalah+dan+hamdalah"
         },
         {
-          id: "PAI-S1-04",
-          semester: 1,
-          kurikulum: "Buku PAI Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Agama Islam",
+          id: "PAI-S1-04", semester: 1, kurikulum: "Buku PAI Kemdikbud", kelas: 1, mapel: "Pendidikan Agama Islam",
           bab: "Bab 4: Mengenal Rukun Islam (5 Pilar Agama Islam)",
           deskripsi: "Menghafal 5 Rukun Islam secara urut dari Syahadat hingga Haji.",
           ringkasan_intro: "Rukun Islam ada 5 perkara yang menjadi tiang utama ajaran agama Islam.",
-          poin_penting: [
-            { judul: "5 Rukun Islam", isi: "1. Mengucapkan dua kalimat syahadat • 2. Mendirikan salat • 3. Membayar zakat • 4. Puasa di bulan Ramadan • 5. Naik haji bagi yang mampu." }
-          ],
+          poin_penting: [{ judul: "5 Rukun Islam", isi: "1. Mengucapkan dua kalimat syahadat • 2. Mendirikan salat • 3. Membayar zakat • 4. Puasa di bulan Ramadan • 5. Naik haji bagi yang mampu." }],
           cara_biasa_judul: "Cara Biasa (Membaca Teks Buku)",
           cara_biasa_langkah: ["Membaca daftar Rukun Islam 1 sampai 5."],
           cara_cepat_judul: "Trik Jitu: '5 Jari = Sya - Sa - Za - Pu - Ha!' ⚡",
@@ -1332,17 +1108,11 @@
           video_url: "https://www.youtube.com/results?search_query=pai+kelas+1+bab+4+mengenal+rukun+islam"
         },
         {
-          id: "PAI-S1-05",
-          semester: 1,
-          kurikulum: "Buku PAI Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Agama Islam",
+          id: "PAI-S1-05", semester: 1, kurikulum: "Buku PAI Kemdikbud", kelas: 1, mapel: "Pendidikan Agama Islam",
           bab: "Bab 5: Nabi dan Rasul Panutanku (25 Nabi & Nabi Muhammad saw.)",
           deskripsi: "Mengenal tugas Nabi dan Rasul serta meneladani sifat jujur Nabi Muhammad saw. (Al-Amin).",
           ringkasan_intro: "Nabi dan Rasul berjumlah 25 orang. Nabi pertama adalah Nabi Adam a.s. dan nabi terakhir adalah Nabi Muhammad saw. yang bergelar Al-Amin (dapat dipercaya).",
-          poin_penting: [
-            { judul: "Gelar Al-Amin", isi: "Nabi Muhammad saw. mendapat gelar Al-Amin karena sejak kecil selalu berkata jujur dan dapat dipercaya." }
-          ],
+          poin_penting: [{ judul: "Gelar Al-Amin", isi: "Nabi Muhammad saw. mendapat gelar Al-Amin karena sejak kecil selalu berkata jujur dan dapat dipercaya." }],
           cara_biasa_judul: "Cara Biasa (Membaca Kisah Nabi)",
           cara_biasa_langkah: ["Membaca kisah keteladanan Nabi Muhammad saw."],
           cara_cepat_judul: "Trik Jitu: 'Pertama = Adam, Terakhir = Muhammad (Al-Amin)!' ⚡",
@@ -1354,17 +1124,11 @@
           video_url: "https://www.youtube.com/results?search_query=pai+kelas+1+bab+5+nabi+dan+rasul+panutanku"
         },
         {
-          id: "PAI-S2-01",
-          semester: 2,
-          kurikulum: "Buku PAI Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Agama Islam",
+          id: "PAI-S2-01", semester: 2, kurikulum: "Buku PAI Kemdikbud", kelas: 1, mapel: "Pendidikan Agama Islam",
           bab: "Bab 6: Al-Qur'an Pedoman Hidupku (Harakat Tanwin & Surah Al-Ikhlas)",
           deskripsi: "Mengenal harakat tanwin (Fathatain, Kasratain, Dammatain) dan pesan Surah Al-Ikhlas (4 ayat).",
           ringkasan_intro: "Di Bab 6 Semester 2, kita belajar tanda baca tanwin (-an, -in, -un) dan Surah Al-Ikhlas yang menegaskan bahwa Allah Swt. Maha Esa (Tunggal).",
-          poin_penting: [
-            { judul: "Harakat Tanwin & Surah Al-Ikhlas", isi: "Fathatain (-an), Kasratain (-in), Dammatain (-un). Surah Al-Ikhlas terdiri dari 4 ayat." }
-          ],
+          poin_penting: [{ judul: "Harakat Tanwin & Surah Al-Ikhlas", isi: "Fathatain (-an), Kasratain (-in), Dammatain (-un). Surah Al-Ikhlas terdiri dari 4 ayat." }],
           cara_biasa_judul: "Cara Biasa (Membaca Surah Al-Ikhlas)",
           cara_biasa_langkah: ["Membaca ayat 1–4 Surah Al-Ikhlas beserta artinya."],
           cara_cepat_judul: "Trik Jitu: 'Tanwin = Dobel Garis (-an, -in, -un)!' ⚡",
@@ -1376,17 +1140,11 @@
           video_url: "https://www.youtube.com/results?search_query=pai+kelas+1+bab+6+harakat+tanwin+surah+al+ikhlas"
         },
         {
-          id: "PAI-S2-02",
-          semester: 2,
-          kurikulum: "Buku PAI Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Agama Islam",
+          id: "PAI-S2-02", semester: 2, kurikulum: "Buku PAI Kemdikbud", kelas: 1, mapel: "Pendidikan Agama Islam",
           bab: "Bab 7: Kasih Sayang Terhadap Sesama (Ar-Rahman & Ar-Rahim)",
           deskripsi: "Mengenal Asmaulhusna Ar-Rahman (Maha Pengasih) dan Ar-Rahim (Maha Penyayang).",
           ringkasan_intro: "Asmaulhusna adalah nama-nama Allah yang baik dan indah (99 nama). Ar-Rahman artinya Maha Pengasih dan Ar-Rahim artinya Maha Penyayang.",
-          poin_penting: [
-            { judul: "Ar-Rahman vs Ar-Rahim", isi: "Ar-Rahman: Maha Pengasih kepada semua makhluk di dunia. Ar-Rahim: Maha Penyayang khusus bagi orang beriman." }
-          ],
+          poin_penting: [{ judul: "Ar-Rahman vs Ar-Rahim", isi: "Ar-Rahman: Maha Pengasih kepada semua makhluk di dunia. Ar-Rahim: Maha Penyayang khusus bagi orang beriman." }],
           cara_biasa_judul: "Cara Biasa (Membaca Arti Asmaulhusna)",
           cara_biasa_langkah: ["Membaca arti Ar-Rahman dan Ar-Rahim."],
           cara_cepat_judul: "Trik Jitu: 'Ar-RahMAN = Maha PeNGASIH, Ar-RahIM = Maha PeNYAYANG!' ⚡",
@@ -1398,17 +1156,11 @@
           video_url: "https://www.youtube.com/results?search_query=pai+kelas+1+bab+7+ar+rahman+ar+rahim"
         },
         {
-          id: "PAI-S2-03",
-          semester: 2,
-          kurikulum: "Buku PAI Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Agama Islam",
+          id: "PAI-S2-03", semester: 2, kurikulum: "Buku PAI Kemdikbud", kelas: 1, mapel: "Pendidikan Agama Islam",
           bab: "Bab 8: Aku Suka Berterima Kasih dan Disiplin",
           deskripsi: "Membiasakan perilaku berterima kasih kepada sesama dan hidup disiplin tepat waktu.",
           ringkasan_intro: "Berterima kasih adalah tanda syukur kepada Allah dan penghargaan kepada orang yang membantu kita, sedangkan disiplin membuat belajar lebih teratur.",
-          poin_penting: [
-            { judul: "Cara Berterima Kasih", isi: "Ucapkan 'Terima kasih' atau 'Jazakallahu khairan' dengan senyuman tulus saat dibantu." }
-          ],
+          poin_penting: [{ judul: "Cara Berterima Kasih", isi: "Ucapkan 'Terima kasih' atau 'Jazakallahu khairan' dengan senyuman tulus saat dibantu." }],
           cara_biasa_judul: "Cara Biasa (Membaca Cerita Akhlak)",
           cara_biasa_langkah: ["Membaca contoh sikap disiplin di rumah dan sekolah."],
           cara_cepat_judul: "Trik Jitu: 'Syukur ke Allah = Alhamdulillah, ke Teman = Terima Kasih!' ⚡",
@@ -1420,17 +1172,11 @@
           video_url: "https://www.youtube.com/results?search_query=pai+kelas+1+bab+8+berterima+kasih+dan+disiplin"
         },
         {
-          id: "PAI-S2-04",
-          semester: 2,
-          kurikulum: "Buku PAI Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Agama Islam",
+          id: "PAI-S2-04", semester: 2, kurikulum: "Buku PAI Kemdikbud", kelas: 1, mapel: "Pendidikan Agama Islam",
           bab: "Bab 9: Membiasakan Hidup Bersih (Tata Cara Wudu & Tayamum)",
           deskripsi: "Memahami urutan berwudu yang benar sebelum salat dan tayamum sebagai pengganti wudu saat tidak ada air.",
           ringkasan_intro: "Sebelum salat kita harus suci dari hadas kecil dengan cara berwudu memakai air suci, atau bertayamum memakai debu suci jika tidak ada air.",
-          poin_penting: [
-            { judul: "Rukun Wudu (Wajib Urut)", isi: "1. Niat • 2. Membasuh muka • 3. Membasuh kedua tangan sampai siku • 4. Mengusap sebagian kepala • 5. Membasuh kedua kaki sampai mata kaki • 6. Tertib." }
-          ],
+          poin_penting: [{ judul: "Rukun Wudu (Wajib Urut)", isi: "1. Niat • 2. Membasuh muka • 3. Membasuh kedua tangan sampai siku • 4. Mengusap sebagian kepala • 5. Membasuh kedua kaki sampai mata kaki • 6. Tertib." }],
           cara_biasa_judul: "Cara Biasa (Membaca Langkah Wudu)",
           cara_biasa_langkah: ["Membaca 8 langkah wudu di buku pelajaran."],
           cara_cepat_judul: "Trik Jitu: 'Rukun Wudu = MU - TA - KE - KA!' ⚡",
@@ -1442,17 +1188,11 @@
           video_url: "https://www.youtube.com/results?search_query=pai+kelas+1+bab+9+tata+cara+wudu+dan+tayamum"
         },
         {
-          id: "PAI-S2-05",
-          semester: 2,
-          kurikulum: "Buku PAI Kemdikbud",
-          kelas: 1,
-          mapel: "Pendidikan Agama Islam",
+          id: "PAI-S2-05", semester: 2, kurikulum: "Buku PAI Kemdikbud", kelas: 1, mapel: "Pendidikan Agama Islam",
           bab: "Bab 10: Nabi Adam a.s. Manusia Pertama",
           deskripsi: "Meneladani kisah Nabi Adam a.s. sebagai manusia pertama serta sikap berani mengakui kesalahan dan bertobat.",
           ringkasan_intro: "Nabi Adam a.s. adalah manusia pertama yang diciptakan Allah Swt. dari tanah. Ketika berbuat salah, Nabi Adam a.s. dan Hawa segera memohon ampun kepada Allah.",
-          poin_penting: [
-            { judul: "Keteladanan Nabi Adam a.s.", isi: "Berani mengakui kesalahan, segera meminta maaf, dan bertobat memohon ampun kepada Allah Swt." }
-          ],
+          poin_penting: [{ judul: "Keteladanan Nabi Adam a.s.", isi: "Berani mengakui kesalahan, segera meminta maaf, dan bertobat memohon ampun kepada Allah Swt." }],
           cara_biasa_judul: "Cara Biasa (Membaca Kisah Nabi Adam)",
           cara_biasa_langkah: ["Membaca kisah penciptaan Nabi Adam a.s."],
           cara_cepat_judul: "Trik Jitu: 'Berbuat Salah → Segera Minta Maaf & Bertobat!' ⚡",
@@ -1464,21 +1204,13 @@
           video_url: "https://www.youtube.com/results?search_query=pai+kelas+1+bab+10+nabi+adam+manusia+pertama"
         },
 
-        // =================================================================
-        // BAHASA INGGRIS UNIT 1–13 (SEMESTER 1 & 2)
-        // =================================================================
+        // BAHASA INGGRIS (7 BAB)
         {
-          id: "ENG-S1-01",
-          semester: 1,
-          kurikulum: "Buku My Next Words Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Inggris",
+          id: "ENG-S1-01", semester: 1, kurikulum: "Buku My Next Words Kemdikbud", kelas: 1, mapel: "Bahasa Inggris",
           bab: "Unit 1 & 2: Greetings & Introduction (Sapaan & Perkenalan)",
           deskripsi: "Menyapa dalam bahasa Inggris (Good morning, Good afternoon, Good evening) dan bertanya nama.",
           ringkasan_intro: "Di Unit 1 & 2 My Next Words, kita belajar menyapa sesuai waktu dan memperkenalkan nama: 'Hello! My name is Budi. How are you? I am fine, thank you.'",
-          poin_penting: [
-            { judul: "Sapaan Waktu", isi: "Good morning (Selamat pagi) • Good afternoon (Selamat siang/sore) • Good evening (Selamat malam) • Good night (Selamat tidur)." }
-          ],
+          poin_penting: [{ judul: "Sapaan Waktu", isi: "Good morning (Selamat pagi) • Good afternoon (Selamat siang/sore) • Good evening (Selamat malam) • Good night (Selamat tidur)." }],
           cara_biasa_judul: "Cara Biasa (Membaca Dialog)",
           cara_biasa_langkah: ["Membaca percakapan sapaan di buku."],
           cara_cepat_judul: "Trik Jitu: 'Morning = Pagi, Afternoon = Siang, Night = Tidur!' ⚡",
@@ -1490,17 +1222,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+inggris+kelas+1+unit+1+my+next+words"
         },
         {
-          id: "ENG-S1-02",
-          semester: 1,
-          kurikulum: "Buku My Next Words Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Inggris",
+          id: "ENG-S1-02", semester: 1, kurikulum: "Buku My Next Words Kemdikbud", kelas: 1, mapel: "Bahasa Inggris",
           bab: "Unit 3 & 4: Numbers 1–10 (Angka 1 sampai 10)",
           deskripsi: "Menghitung angka 1–10 dalam bahasa Inggris dan menjawab pertanyaan 'How many...?'",
           ringkasan_intro: "Di Unit 3 & 4, kita menghafal angka 1–10 (One to Ten) serta menghitung jumlah benda dengan pola kalimat 'I have five books.'",
-          poin_penting: [
-            { judul: "Angka 1–10", isi: "1 One, 2 Two, 3 Three, 4 Four, 5 Five, 6 Six, 7 Seven, 8 Eight, 9 Nine, 10 Ten." }
-          ],
+          poin_penting: [{ judul: "Angka 1–10", isi: "1 One, 2 Two, 3 Three, 4 Four, 5 Five, 6 Six, 7 Seven, 8 Eight, 9 Nine, 10 Ten." }],
           cara_biasa_judul: "Cara Biasa (Menghafal Daftar)",
           cara_biasa_langkah: ["Membaca tulisan angka 1 sampai 10."],
           cara_cepat_judul: "Trik Jitu: 'Nyanyikan Lagu One, Two, Three!' ⚡",
@@ -1512,17 +1238,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+inggris+kelas+1+unit+3+numbers+my+next+words"
         },
         {
-          id: "ENG-S1-03",
-          semester: 1,
-          kurikulum: "Buku My Next Words Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Inggris",
+          id: "ENG-S1-03", semester: 1, kurikulum: "Buku My Next Words Kemdikbud", kelas: 1, mapel: "Bahasa Inggris",
           bab: "Unit 5: Classroom Objects (Benda-Benda di Kelas)",
           deskripsi: "Mengenal kosakata benda di ruang kelas seperti book, pencil, bag, chair, table, ruler, eraser.",
           ringkasan_intro: "Di Unit 5, kita belajar nama benda di tas dan kelas memakai kalimat 'It is a pencil' (Ini sebuah pensil).",
-          poin_penting: [
-            { judul: "Kosakata Benda Kelas", isi: "Book (buku), Pencil (pensil), Bag (tas), Eraser (penghapus), Ruler (penggaris), Chair (kursi), Table (meja)." }
-          ],
+          poin_penting: [{ judul: "Kosakata Benda Kelas", isi: "Book (buku), Pencil (pensil), Bag (tas), Eraser (penghapus), Ruler (penggaris), Chair (kursi), Table (meja)." }],
           cara_biasa_judul: "Cara Biasa (Membaca Gambar Benda)",
           cara_biasa_langkah: ["Melihat gambar benda di buku."],
           cara_cepat_judul: "Trik Jitu: 'Tempel Label Inggris di Tas & Meja!' ⚡",
@@ -1534,17 +1254,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+inggris+kelas+1+unit+5+my+next+words"
         },
         {
-          id: "ENG-S1-04",
-          semester: 1,
-          kurikulum: "Buku My Next Words Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Inggris",
+          id: "ENG-S1-04", semester: 1, kurikulum: "Buku My Next Words Kemdikbud", kelas: 1, mapel: "Bahasa Inggris",
           bab: "Unit 6 & 7: Colors & Shapes (Warna dan Bentuk)",
           deskripsi: "Mengenal nama warna (red, yellow, blue, green, black, white) dan bentuk (circle, square, triangle).",
           ringkasan_intro: "Di Unit 6 & 7 (Penutup Semester 1), kita menggabungkan warna dan bentuk, seperti 'It is a red circle' (Ini lingkaran merah).",
-          poin_penting: [
-            { judul: "Warna & Bentuk Dasar", isi: "Red (merah), Yellow (kuning), Blue (biru), Green (hijau) | Circle (lingkaran), Square (persegi), Triangle (segitiga)." }
-          ],
+          poin_penting: [{ judul: "Warna & Bentuk Dasar", isi: "Red (merah), Yellow (kuning), Blue (biru), Green (hijau) | Circle (lingkaran), Square (persegi), Triangle (segitiga)." }],
           cara_biasa_judul: "Cara Biasa (Membaca Warna)",
           cara_biasa_langkah: ["Membaca daftar nama warna."],
           cara_cepat_judul: "Trik Jitu: 'Susunan Bahasa Inggris: WARNA dulu baru BENDA!' ⚡",
@@ -1556,17 +1270,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+inggris+kelas+1+unit+6+colors+my+next+words"
         },
         {
-          id: "ENG-S2-01",
-          semester: 2,
-          kurikulum: "Buku My Next Words Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Inggris",
+          id: "ENG-S2-01", semester: 2, kurikulum: "Buku My Next Words Kemdikbud", kelas: 1, mapel: "Bahasa Inggris",
           bab: "Unit 8 & 9: Animals at the Farm (Hewan & Jumlahnya)",
           deskripsi: "Mengenal nama hewan (cat, dog, bird, fish, duck, cow, rabbit) dan bentuk jamak (+s).",
           ringkasan_intro: "Di Unit 8 & 9 Semester 2, kita mengenal nama hewan peliharaan dan ternak, serta menambahkan huruf '-s' jika jumlah hewannya lebih dari satu (two cats).",
-          poin_penting: [
-            { judul: "Kosakata Hewan", isi: "Cat (kucing), Dog (anjing), Bird (burung), Fish (ikan), Duck (bebek), Cow (sapi), Rabbit (kelinci)." }
-          ],
+          poin_penting: [{ judul: "Kosakata Hewan", isi: "Cat (kucing), Dog (anjing), Bird (burung), Fish (ikan), Duck (bebek), Cow (sapi), Rabbit (kelinci)." }],
           cara_biasa_judul: "Cara Biasa (Menghafal Nama Hewan)",
           cara_biasa_langkah: ["Membaca gambar hewan di buku."],
           cara_cepat_judul: "Trik Jitu: 'Lebih dari 1 Hewan = Tambah Huruf -S!' ⚡",
@@ -1578,17 +1286,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+inggris+kelas+1+unit+8+animals+my+next+words"
         },
         {
-          id: "ENG-S2-02",
-          semester: 2,
-          kurikulum: "Buku My Next Words Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Inggris",
+          id: "ENG-S2-02", semester: 2, kurikulum: "Buku My Next Words Kemdikbud", kelas: 1, mapel: "Bahasa Inggris",
           bab: "Unit 10 & 11: He/She & My Family (Anggota Keluarga)",
           deskripsi: "Membedakan kata ganti He (dia laki-laki) dan She (dia perempuan), serta anggota keluarga.",
           ringkasan_intro: "Di Unit 10 & 11, kita belajar menyebut anggota keluarga: Father (ayah), Mother (ibu), Brother (saudara laki-laki), Sister (saudara perempuan), dan memakai He/She.",
-          poin_penting: [
-            { judul: "He vs She & My Family", isi: "He is my father (Dia ayahku) • She is my mother (Dia ibuku)." }
-          ],
+          poin_penting: [{ judul: "He vs She & My Family", isi: "He is my father (Dia ayahku) • She is my mother (Dia ibuku)." }],
           cara_biasa_judul: "Cara Biasa (Membaca Pohon Keluarga)",
           cara_biasa_langkah: ["Membaca foto keluarga di buku."],
           cara_cepat_judul: "Trik Jitu: 'HE = Laki-Laki, SHE = Perempuan (Ada huruf S)!' ⚡",
@@ -1600,17 +1302,11 @@
           video_url: "https://www.youtube.com/results?search_query=bahasa+inggris+kelas+1+unit+11+my+family+my+next+words"
         },
         {
-          id: "ENG-S2-03",
-          semester: 2,
-          kurikulum: "Buku My Next Words Kemdikbud",
-          kelas: 1,
-          mapel: "Bahasa Inggris",
+          id: "ENG-S2-03", semester: 2, kurikulum: "Buku My Next Words Kemdikbud", kelas: 1, mapel: "Bahasa Inggris",
           bab: "Unit 12 & 13: I Like Fruits (Buah-Buahan & Rasa Suka)",
           deskripsi: "Mengenal nama buah (apple, banana, orange, mango, watermelon, grape) dan kalimat 'I like...'",
           ringkasan_intro: "Di Unit 12 & 13 (Penutup Semester 2), kita belajar mengungkapkan buah kesukaan memakai 'I like banana' (Saya suka pisang).",
-          poin_penting: [
-            { judul: "Kosakata Buah-Buahan", isi: "Apple (apel), Banana (pisang), Orange (jeruk), Mango (mangga), Watermelon (semangka), Grape (anggur)." }
-          ],
+          poin_penting: [{ judul: "Kosakata Buah-Buahan", isi: "Apple (apel), Banana (pisang), Orange (jeruk), Mango (mangga), Watermelon (semangka), Grape (anggur)." }],
           cara_biasa_judul: "Cara Biasa (Membaca Nama Buah)",
           cara_biasa_langkah: ["Membaca gambar buah di buku."],
           cara_cepat_judul: "Trik Jitu: 'Saya Suka = I Like..., Kamu Suka = You Like...' ⚡",
@@ -1623,689 +1319,61 @@
         }
       ],
       soal: [
-        // --- PENDIDIKAN PANCASILA (8 SOAL) ---
         {
-          id: "Q-PPKN1-01",
-          materi_id: "PPKN-S1-01",
+          id: "Q-PPKN1-01", materi_id: "PPKN-S1-01",
           question: "Apakah simbol sila ke-1 Pancasila ('Ketuhanan Yang Maha Esa') pada perisai Garuda Pancasila?",
-          correct_answer: "Bintang Emas",
-          wrong_answer_1: "Rantai Emas",
-          wrong_answer_2: "Pohon Beringin",
-          wrong_answer_3: "Kepala Banteng",
+          correct_answer: "Bintang Emas", wrong_answer_1: "Rantai Emas", wrong_answer_2: "Pohon Beringin", wrong_answer_3: "Kepala Banteng",
           explanation_normal: "Sila pertama Pancasila berbunyi 'Ketuhanan Yang Maha Esa' dilambangkan dengan Bintang Emas.",
           explanation_fast_trick: "Ingat urutan Bin-Ran-Po-Ban-PaKa: Nomor 1 adalah BINtang!"
         },
         {
-          id: "Q-PPKN1-02",
-          materi_id: "PPKN-S1-01",
-          question: "Simbol Padi dan Kapas melambangkan sila Pancasila ke-...",
-          correct_answer: "Sila ke-5 (Keadilan Sosial bagi Seluruh Rakyat Indonesia)",
-          wrong_answer_1: "Sila ke-2 (Kemanusiaan yang Adil dan Beradab)",
-          wrong_answer_2: "Sila ke-3 (Persatuan Indonesia)",
-          wrong_answer_3: "Sila ke-4 (Kerakyatan yang Dipimpin oleh Hikmat Kebijaksanaan...)",
-          explanation_normal: "Padi dan Kapas adalah simbol sila ke-5 Pancasila yang mengajarkan sikap adil dan suka berbagi.",
-          explanation_fast_trick: "Urutan ke-5 terakhir adalah PaKa = PAdi dan KApas!"
-        },
-        {
-          id: "Q-PPKN2-01",
-          materi_id: "PPKN-S1-02",
-          question: "Apa yang sebaiknya dilakukan seorang anak sebelum berangkat pergi ke sekolah?",
-          correct_answer: "Berpamitan dan mencium tangan orang tua",
-          wrong_answer_1: "Langsung keluar rumah tanpa bilang apa-apa",
-          wrong_answer_2: "Melempar tas di depan pintu",
-          wrong_answer_3: "Berteriak memanggil teman dari luar",
-          explanation_normal: "Berpamitan kepada orang tua sebelum pergi merupakan contoh perilaku patuh aturan di rumah.",
-          explanation_fast_trick: "Ingat 3 kata kunci anak patuh aturan: PAMIT, RAPI, dan TEPAT WAKTU!"
-        },
-        {
-          id: "Q-PPKN2-02",
-          materi_id: "PPKN-S1-02",
-          question: "Mengapa kita harus mematuhi aturan di rumah dan di sekolah?",
-          correct_answer: "Agar hidup menjadi tertib, aman, dan nyaman",
-          wrong_answer_1: "Agar mendapat banyak mainan mahal",
-          wrong_answer_2: "Supaya tidak perlu belajar lagi",
-          wrong_answer_3: "Agar boleh datang terlambat ke sekolah",
-          explanation_normal: "Aturan dibuat untuk menciptakan ketertiban, keamanan, dan kenyamanan bagi semua orang.",
-          explanation_fast_trick: "Patuh aturan = Hidup TERTIB, AMAN, & NYAMAN!"
-        },
-        {
-          id: "Q-PPKN3-01",
-          materi_id: "PPKN-S2-01",
-          question: "Apa arti semboyan 'Bhinneka Tunggal Ika' yang tertulis pada pita yang dicengkeram burung Garuda Pancasila?",
-          correct_answer: "Berbeda-beda tetapi tetap satu jua",
-          wrong_answer_1: "Bersatu kita teguh bercerai kita runtuh",
-          wrong_answer_2: "Rajin pangkal pandai hemat pangkal kaya",
-          wrong_answer_3: "Kebersihan adalah sebagian dari iman",
-          explanation_normal: "Bhinneka Tunggal Ika berasal dari bahasa Jawa Kuno yang artinya 'Berbeda-beda tetapi tetap satu jua'.",
-          explanation_fast_trick: "Bhinneka = Berbeda-beda, Tunggal Ika = Tetap Satu Jua!"
-        },
-        {
-          id: "Q-PPKN3-02",
-          materi_id: "PPKN-S2-01",
-          question: "Meskipun teman sebangku kita berasal dari suku daerah dan kegemaran yang berbeda, sikap kita sebaiknya ...",
-          correct_answer: "Saling menghargai dan tetap berteman rukun",
-          wrong_answer_1: "Menjauhinya saat jam istirahat",
-          wrong_answer_2: "Menertawakan bahasa daerahnya",
-          wrong_answer_3: "Hanya mau bermain dengan yang sama",
-          explanation_normal: "Keberagaman teman adalah kekayaan bangsa Indonesia yang harus kita hormati dengan hidup rukun.",
-          explanation_fast_trick: "Beda suku & hobi bukan penghalang untuk berteman rukun!"
-        },
-        {
-          id: "Q-PPKN4-01",
-          materi_id: "PPKN-S2-02",
-          question: "Apa manfaat utama melakukan pekerjaan dengan cara GOTONG ROYONG bersama-sama?",
-          correct_answer: "Pekerjaan berat menjadi ringan dan cepat selesai",
-          wrong_answer_1: "Pekerjaan menjadi semakin lama selesai",
-          wrong_answer_2: "Membuat kelas menjadi semakin kotor",
-          wrong_answer_3: "Menambah pertengkaran antar teman",
-          explanation_normal: "Dengan bergotong royong, pekerjaan yang berat terasa lebih ringan dan lebih cepat selesai.",
-          explanation_fast_trick: "Ingat rumus Gotong Royong: Berat jadi RINGAN, Lama jadi CEPAT!"
-        },
-        {
-          id: "Q-PPKN4-02",
-          materi_id: "PPKN-S2-02",
-          question: "Manakah contoh kegiatan gotong royong yang bisa dilakukan siswa Kelas 1 di sekolah?",
-          correct_answer: "Melaksanakan piket membersihkan kelas bersama regu piket",
-          wrong_answer_1: "Membuang bungkus jajan di laci meja",
-          wrong_answer_2: "Mencoret-coret papan tulis saat istirahat",
-          wrong_answer_3: "Membiarkan teman menyapu kelas sendirian",
-          explanation_normal: "Piket membersihkan kelas bersama teman merupakan wujud nyata gotong royong di lingkungan sekolah.",
-          explanation_fast_trick: "Kerja sama membersihkan kelas = Piket kelas (Gotong Royong)!"
-        },
-        {
-          id: "Q-PPKN5-01",
-          materi_id: "PPKN-S1-03",
-          question: "Apakah warna dasar pada bagian tengah perisai Garuda Pancasila yang bergambar Bintang Emas?",
-          correct_answer: "Hitam",
-          wrong_answer_1: "Hijau",
-          wrong_answer_2: "Biru",
-          wrong_answer_3: "Kuning",
-          explanation_normal: "Perisai kecil di bagian tengah tempat simbol Bintang Emas berada memiliki warna dasar hitam.",
-          explanation_fast_trick: "Bintang emas bersinar terang di atas latar warna HITAM!"
-        },
-        {
-          id: "Q-PPKN5-02",
-          materi_id: "PPKN-S1-03",
-          question: "Berdiskusi bersama keluarga di rumah untuk menentukan tempat tujuan berlibur adalah pengamalan sila ke-...",
-          correct_answer: "Sila ke-4 (Kerakyatan yang Dipimpin oleh Hikmat Kebijaksanaan...)",
-          wrong_answer_1: "Sila ke-1 (Ketuhanan Yang Maha Esa)",
-          wrong_answer_2: "Sila ke-3 (Persatuan Indonesia)",
-          wrong_answer_3: "Sila ke-5 (Keadilan Sosial bagi Seluruh Rakyat Indonesia)",
-          explanation_normal: "Berdiskusi atau bermusyawarah untuk mengambil keputusan bersama merupakan pengamalan sila ke-4 Pancasila.",
-          explanation_fast_trick: "Ingat kata kunci Sila ke-4 (Kepala Banteng) = Musyawarah & Diskusi!"
-        },
-        {
-          id: "Q-PPKN6-01",
-          materi_id: "PPKN-S1-04",
-          question: "Apa akibatnya jika seorang anak tidur terlalu larut malam setiap hari?",
-          correct_answer: "Bangun kesiangan dan mengantuk saat belajar di sekolah",
-          wrong_answer_1: "Menjadi lebih segar dan cepat bangun pagi",
-          wrong_answer_2: "Mendapat hadiah piala dari guru",
-          wrong_answer_3: "Pelajaran menjadi lebih mudah dipahami",
-          explanation_normal: "Tidur terlalu malam melanggar aturan waktu istirahat sehingga membuat bangun kesiangan dan mengantuk.",
-          explanation_fast_trick: "Langgar aturan tidur tepat waktu = Bangun kesiangan & mengantuk!"
-        },
-        {
-          id: "Q-PPKN6-02",
-          materi_id: "PPKN-S1-04",
-          question: "Mengapa kita dilarang berlarian di dalam ruang kelas atau koridor sekolah?",
-          correct_answer: "Karena berbahaya dan bisa terjatuh atau menabrak teman",
-          wrong_answer_1: "Karena lantai kelas terbuat dari pasir",
-          wrong_answer_2: "Agar sepatu tidak cepat kotor",
-          wrong_answer_3: "Supaya tidak bisa pulang ke rumah",
-          explanation_normal: "Aturan berjalan tertib di koridor dibuat untuk menjaga keselamatan agar siswa tidak terjatuh.",
-          explanation_fast_trick: "Ingat: Aturan dibuat agar kita SELAMAT & AMAN!"
-        },
-        {
-          id: "Q-PPKN7-01",
-          materi_id: "PPKN-S2-03",
-          question: "Bagian rumah yang berfungsi sebagai tempat menerima tamu yang berkunjung adalah ...",
-          correct_answer: "Ruang tamu",
-          wrong_answer_1: "Kamar mandi",
-          wrong_answer_2: "Dapur",
-          wrong_answer_3: "Gudang",
-          explanation_normal: "Ruang tamu digunakan untuk menyambut dan mempersilakan tamu duduk dengan sopan.",
-          explanation_fast_trick: "Menerima tamu → Ruang tamu!"
-        },
-        {
-          id: "Q-PPKN7-02",
-          materi_id: "PPKN-S2-03",
-          question: "Bagaimana sikap yang baik ketika kita berpapasan dengan tetangga di depan rumah?",
-          correct_answer: "Tersenyum dan menyapa dengan ramah",
-          wrong_answer_1: "Berlari masuk rumah dan menutup pintu keras-keras",
-          wrong_answer_2: "Membuang muka dan diam saja",
-          wrong_answer_3: "Berteriak keras di dekat pagar tetangga",
-          explanation_normal: "Menyapa tetangga dengan senyuman menjaga kerukunan hidup bertetangga.",
-          explanation_fast_trick: "Bertemu tetangga = Senyum & Sapa ramah!"
-        },
-        {
-          id: "Q-PPKN8-01",
-          materi_id: "PPKN-S2-04",
-          question: "Apa yang harus kita lakukan setelah selesai mencuci tangan di keran air?",
-          correct_answer: "Menutup keran air hingga rapat agar air tidak terbuang",
-          wrong_answer_1: "Membiarkan keran terus mengalir deras",
-          wrong_answer_2: "Memercikkan air ke baju teman",
-          wrong_answer_3: "Membuang tisu bekas ke lantai",
-          explanation_normal: "Menutup keran air setelah digunakan adalah bentuk penghematan air bersih dan menjaga lingkungan.",
-          explanation_fast_trick: "Ingat 3M: Matikan lampu, Matikan keran, Masukkan sampah!"
-        },
-        {
-          id: "Q-PPKN8-02",
-          materi_id: "PPKN-S2-04",
-          question: "Manakah yang termasuk contoh sampah organik yang berasal dari alam?",
-          correct_answer: "Daun kering dan kulit buah pisang",
-          wrong_answer_1: "Botol minuman plastik",
-          wrong_answer_2: "Kaleng bekas susu",
-          wrong_answer_3: "Kantong kresek plastik",
-          explanation_normal: "Daun kering dan kulit buah berasal dari tumbuhan sehingga mudah membusuk menjadi sampah organik.",
-          explanation_fast_trick: "Organik = berasal dari makhluk hidup/tumbuhan (daun, sisa buah)!"
-        },
-
-        // --- MATEMATIKA (12 SOAL) ---
-        {
-          id: "Q-MAT1-01",
-          materi_id: "MAT-S1-01",
+          id: "Q-MAT1-01", materi_id: "MAT-S1-01",
           question: "Lambang bilangan untuk nama bilangan 'delapan' adalah ...",
-          correct_answer: "8",
-          wrong_answer_1: "6",
-          wrong_answer_2: "7",
-          wrong_answer_3: "9",
+          correct_answer: "8", wrong_answer_1: "6", wrong_answer_2: "7", wrong_answer_3: "9",
           explanation_normal: "Urutan lambang bilangan: 6 (enam), 7 (tujuh), 8 (delapan), 9 (sembilan).",
           explanation_fast_trick: "Angka 8 bentuknya seperti dua lingkaran bertumpuk!"
         },
         {
-          id: "Q-MAT1-02",
-          materi_id: "MAT-S1-01",
-          question: "Di piring A ada 7 kue. Di piring B ada 5 kue. Kue di piring A ... dari piring B.",
-          correct_answer: "Lebih banyak",
-          wrong_answer_1: "Lebih sedikit",
-          wrong_answer_2: "Sama banyak",
-          wrong_answer_3: "Kosong",
-          explanation_normal: "Karena 7 berada setelah 5 saat membilang, maka 7 lebih banyak dari 5.",
-          explanation_fast_trick: "7 > 5, artinya piring A lebih banyak!"
-        },
-        {
-          id: "Q-MAT2-01",
-          materi_id: "MAT-S1-02",
-          question: "Berapakah hasil dari 6 + 4?",
-          correct_answer: "10",
-          wrong_answer_1: "8",
-          wrong_answer_2: "9",
-          wrong_answer_3: "11",
-          explanation_normal: "Jika 6 digabung dengan 4 maka jumlah seluruhnya adalah 10.",
-          explanation_fast_trick: "6 dan 4 adalah pasangan bilangan pembuat 10!"
-        },
-        {
-          id: "Q-MAT3-01",
-          materi_id: "MAT-S1-03",
-          question: "Ibu membeli 9 jeruk. Sebanyak 4 jeruk dimakan adik. Berapa sisa jeruk Ibu sekarang?",
-          correct_answer: "5 jeruk",
-          wrong_answer_1: "4 jeruk",
-          wrong_answer_2: "6 jeruk",
-          wrong_answer_3: "13 jeruk",
-          explanation_normal: "9 dikurangi 4 sama dengan 5.",
-          explanation_fast_trick: "Hitung maju dari 4 menuju 9: 5, 6, 7, 8, 9 (ada 5 jari)!"
-        },
-        {
-          id: "Q-MAT4-01",
-          materi_id: "MAT-S1-04",
-          question: "Benda di kelas yang berbentuk lingkaran adalah ...",
-          correct_answer: "Jam dinding bundar",
-          wrong_answer_1: "Papan tulis",
-          wrong_answer_2: "Buku tulis",
-          wrong_answer_3: "Penggaris segitiga",
-          explanation_normal: "Jam dinding bundar memiliki 1 sisi lengkung tanpa sudut sehingga berbentuk lingkaran.",
-          explanation_fast_trick: "Lingkaran tidak punya pojok/sudut!"
-        },
-        {
-          id: "Q-MAT5-01",
-          materi_id: "MAT-S2-01",
-          question: "Bilangan 18 terdiri dari ... puluhan dan ... satuan.",
-          correct_answer: "1 puluhan dan 8 satuan",
-          wrong_answer_1: "8 puluhan dan 1 satuan",
-          wrong_answer_2: "1 puluhan dan 1 satuan",
-          wrong_answer_3: "10 puluhan dan 8 satuan",
-          explanation_normal: "18 = 10 + 8, yaitu 1 puluhan dan 8 satuan.",
-          explanation_fast_trick: "Angka depan (1) = puluhan, angka belakang (8) = satuan!"
-        },
-        {
-          id: "Q-MAT6-01",
-          materi_id: "MAT-S2-02",
-          question: "Berapakah hasil dari 9 + 6?",
-          correct_answer: "15",
-          wrong_answer_1: "13",
-          wrong_answer_2: "14",
-          wrong_answer_3: "16",
-          explanation_normal: "9 + 6 = (9 + 1) + 5 = 10 + 5 = 15.",
-          explanation_fast_trick: "Lengkapi 9 jadi 10 (ambil 1 dari 6), sisa 5 → 10 + 5 = 15!"
-        },
-        {
-          id: "Q-MAT7-01",
-          materi_id: "MAT-S2-03",
-          question: "Panjang pensil Ani 6 klip kertas. Panjang penghapus 2 klip kertas. Benda yang lebih panjang adalah ...",
-          correct_answer: "Pensil Ani",
-          wrong_answer_1: "Penghapus",
-          wrong_answer_2: "Sama panjang",
-          wrong_answer_3: "Klip kertas",
-          explanation_normal: "6 klip kertas lebih banyak daripada 2 klip kertas.",
-          explanation_fast_trick: "6 > 2, maka pensil lebih panjang!"
-        },
-        {
-          id: "Q-MAT8-01",
-          materi_id: "MAT-S2-04",
-          question: "Pada diagram gambar, jika 1 gambar bintang mewakili 1 siswa, maka 5 gambar bintang berarti ...",
-          correct_answer: "5 siswa",
-          wrong_answer_1: "1 siswa",
-          wrong_answer_2: "4 siswa",
-          wrong_answer_3: "10 siswa",
-          explanation_normal: "Setiap 1 gambar mewakili 1 siswa, jadi 5 gambar = 5 siswa.",
-          explanation_fast_trick: "Hitung jumlah gambarnya langsung!"
-        },
-
-        // --- JARIMATIKA (14 SOAL) ---
-        {
-          id: "Q-JAR1-01",
-          materi_id: "JAR-S1-01",
+          id: "Q-JAR1-01", materi_id: "JAR-S1-01",
           question: "Pada Jarimatika Tangan Kanan, berapakah nilai JEMPOL saja yang terbuka?",
-          correct_answer: "5",
-          wrong_answer_1: "1",
-          wrong_answer_2: "4",
-          wrong_answer_3: "10",
+          correct_answer: "5", wrong_answer_1: "1", wrong_answer_2: "4", wrong_answer_3: "10",
           explanation_normal: "Di tangan kanan, ibu jari (jempol) bernilai 5.",
           explanation_fast_trick: "Ingat: Jempol kanan = 5!"
         },
         {
-          id: "Q-JAR1-02",
-          materi_id: "JAR-S1-01",
-          question: "Jika Jempol kanan (5) dan Telunjuk kanan (1) terbuka, angka berapa yang terbentuk?",
-          correct_answer: "6",
-          wrong_answer_1: "2",
-          wrong_answer_2: "5",
-          wrong_answer_3: "7",
-          explanation_normal: "5 + 1 = 6.",
-          explanation_fast_trick: "Jempol (5) + 1 jari = 6!"
-        },
-        {
-          id: "Q-JAR2-01",
-          materi_id: "JAR-S1-02",
-          question: "Hitung dengan Jarimatika: 3 + 5 - 2 = ...",
-          correct_answer: "6",
-          wrong_answer_1: "5",
-          wrong_answer_2: "7",
-          wrong_answer_3: "8",
-          explanation_normal: "3 + 5 = 8, lalu 8 - 2 = 6.",
-          explanation_fast_trick: "Buka 3 jari → buka Jempol (jadi 8) → lipat 2 jari (sisa Jempol + Telunjuk = 6)!"
-        },
-        {
-          id: "Q-JAR3-01",
-          materi_id: "JAR-S1-03",
-          question: "Gunakan teknik Teman Kecil 5: Berapakah hasil dari 4 + 3?",
-          correct_answer: "7",
-          wrong_answer_1: "6",
-          wrong_answer_2: "8",
-          wrong_answer_3: "9",
-          explanation_normal: "4 + 3 = 7.",
-          explanation_fast_trick: "Buka Jempol (+5) dan tutup teman kecil 3 yaitu 2 jari → tersisa Jempol + 2 jari = 7!"
-        },
-        {
-          id: "Q-JAR4-01",
-          materi_id: "JAR-S2-01",
-          question: "Di Tangan Kiri (Puluhan), jika Jempol Kiri terbuka bersama 2 jari lainnya, berapakah nilainya?",
-          correct_answer: "70",
-          wrong_answer_1: "7",
-          wrong_answer_2: "30",
-          wrong_answer_3: "60",
-          explanation_normal: "Jempol kiri (50) + 2 jari kiri (20) = 70.",
-          explanation_fast_trick: "50 + 20 = 70!"
-        },
-        {
-          id: "Q-JAR5-01",
-          materi_id: "JAR-S2-02",
-          question: "Tangan Kiri menunjukkan 40, dan Tangan Kanan menunjukkan 8. Berapa bilangan dua digit yang terbentuk?",
-          correct_answer: "48",
-          wrong_answer_1: "84",
-          wrong_answer_2: "12",
-          wrong_answer_3: "408",
-          explanation_normal: "40 (puluhan) + 8 (satuan) = 48.",
-          explanation_fast_trick: "Gabung kiri (4) dan kanan (8) → 48!"
-        },
-        {
-          id: "Q-JAR6-01",
-          materi_id: "JAR-S2-03",
-          question: "Hitung cepat dengan Sahabat Besar 10: 9 + 6 = ...",
-          correct_answer: "15",
-          wrong_answer_1: "14",
-          wrong_answer_2: "16",
-          wrong_answer_3: "13",
-          explanation_normal: "9 + 6 = 15.",
-          explanation_fast_trick: "Buka +10 di tangan kiri, tutup 4 (sahabat 6) di tangan kanan → 15!"
-        },
-        {
-          id: "Q-JAR7-01",
-          materi_id: "JAR-S2-04",
-          question: "Pada Jarimatika Perkalian 9: Jika kita melipat jari ke-4, berapakah hasil 9 × 4?",
-          correct_answer: "36",
-          wrong_answer_1: "27",
-          wrong_answer_2: "45",
-          wrong_answer_3: "34",
-          explanation_normal: "Di sebelah kiri jari ke-4 ada 3 jari (30), dan di sebelah kanan ada 6 jari (6), sehingga 36.",
-          explanation_fast_trick: "Kiri = 3 puluhan (30), Kanan = 6 satuan (6) → 36!"
-        },
-        {
-          id: "Q-JAR7-02",
-          materi_id: "JAR-S2-04",
-          question: "Berapakah hasil 9 × 8 menggunakan Jarimatika 10 jari?",
-          correct_answer: "72",
-          wrong_answer_1: "63",
-          wrong_answer_2: "81",
-          wrong_answer_3: "78",
-          explanation_normal: "Lipat jari ke-8: di kiri ada 7 jari (70) dan di kanan ada 2 jari (2) = 72.",
-          explanation_fast_trick: "Kiri 7 jari (70) + Kanan 2 jari (2) = 72!"
-        },
-        {
-          id: "Q-JAR8-01",
-          materi_id: "JAR-S2-05",
-          question: "Hitung cepat pembagian 9: 63 ÷ 9 = ...",
-          correct_answer: "7",
-          wrong_answer_1: "6",
-          wrong_answer_2: "8",
-          wrong_answer_3: "9",
-          explanation_normal: "63 ÷ 9 = 7 karena 9 × 7 = 63.",
-          explanation_fast_trick: "Pisahkan 6 jari di kiri dan 3 jari di kanan → jari pembatas di tengah adalah jari ke-7!"
-        },
-
-        // --- BAHASA INDONESIA (8 SOAL) ---
-        {
-          id: "Q-BIN1-01",
-          materi_id: "BIN-S1-01",
+          id: "Q-BIN1-01", materi_id: "BIN-S1-01",
           question: "Manakah kata yang diawali dengan suku kata 'bu-'?",
-          correct_answer: "bu-ku",
-          wrong_answer_1: "bo-la",
-          wrong_answer_2: "ba-ju",
-          wrong_answer_3: "bi-ru",
+          correct_answer: "bu-ku", wrong_answer_1: "bo-la", wrong_answer_2: "ba-ju", wrong_answer_3: "bi-ru",
           explanation_normal: "Kata 'buku' terdiri dari suku kata 'bu' dan 'ku'.",
           explanation_fast_trick: "Dengarkan bunyi awalnya: BU-ku!"
         },
         {
-          id: "Q-BIN2-01",
-          materi_id: "BIN-S1-02",
-          question: "Tanda baca yang tepat untuk kalimat 'Di mana rumahmu...' adalah ...",
-          correct_answer: "Tanda tanya (?)",
-          wrong_answer_1: "Tanda seru (!)",
-          wrong_answer_2: "Tanda titik (.)",
-          wrong_answer_3: "Tanda koma (,)",
-          explanation_normal: "Kalimat tersebut menanyakan tempat sehingga diakhiri tanda tanya (?).",
-          explanation_fast_trick: "Ada kata tanya 'Di mana' → pakai (?)!"
-        },
-        {
-          id: "Q-BIN3-01",
-          materi_id: "BIN-S1-03",
-          question: "Agar kuman di tangan hilang sebelum makan, kita harus mencuci tangan memakai ...",
-          correct_answer: "Sabun dan air mengalir",
-          wrong_answer_1: "Kertas tisu saja",
-          wrong_answer_2: "Tanah kering",
-          wrong_answer_3: "Minyak goreng",
-          explanation_normal: "Sabun dan air mengalir membersihkan kuman dari telapak dan sela jari.",
-          explanation_fast_trick: "Sabun + air mengalir = tangan bebas kuman!"
-        },
-        {
-          id: "Q-BIN4-01",
-          materi_id: "BIN-S1-04",
-          question: "Bagaimana cara kelinci bergerak?",
-          correct_answer: "Melompat",
-          wrong_answer_1: "Terbang",
-          wrong_answer_2: "Berenang",
-          wrong_answer_3: "Melata",
-          explanation_normal: "Kelinci menggunakan kaki belakangnya yang kuat untuk melompat.",
-          explanation_fast_trick: "Kelinci bergerak dengan cara melompat!"
-        },
-        {
-          id: "Q-BIN5-01",
-          materi_id: "BIN-S2-01",
-          question: "Jika kamu tidak sengaja menyenggol buku teman hingga jatuh, kata ajaib apa yang harus kamu ucapkan?",
-          correct_answer: "Maaf",
-          wrong_answer_1: "Tolong",
-          wrong_answer_2: "Permisi",
-          wrong_answer_3: "Terima kasih",
-          explanation_normal: "Saat melakukan kesalahan, kita mengucapkan kata 'Maaf'.",
-          explanation_fast_trick: "Berbuat salah → ucapkan MAAF!"
-        },
-        {
-          id: "Q-BIN6-01",
-          materi_id: "BIN-S2-02",
-          question: "Manakah kata yang diawali dengan suku kata 'ga-'?",
-          correct_answer: "ga-jah",
-          wrong_answer_1: "gi-gi",
-          wrong_answer_2: "gu-la",
-          wrong_answer_3: "ge-las",
-          explanation_normal: "Kata 'gajah' diawali suku kata 'ga'.",
-          explanation_fast_trick: "GA-jah berawalan huruf g + a!"
-        },
-        {
-          id: "Q-BIN7-01",
-          materi_id: "BIN-S2-03",
-          question: "Manakah yang termasuk KEBUTUHAN pokok siswa sekolah?",
-          correct_answer: "Buku tulis dan makanan bergizi",
-          wrong_answer_1: "Mainan robot mahal",
-          wrong_answer_2: "Permen warna-warni setiap jam",
-          wrong_answer_3: "Balon tiup",
-          explanation_normal: "Buku tulis dan makanan bergizi adalah kebutuhan agar bisa belajar dan tumbuh sehat.",
-          explanation_fast_trick: "Kebutuhan = penting untuk sehat & belajar!"
-        },
-        {
-          id: "Q-BIN8-01",
-          materi_id: "BIN-S2-04",
-          question: "Tempat paling aman untuk menyeberang jalan raya adalah di ...",
-          correct_answer: "Zebra cross (garis putih penyeberangan)",
-          wrong_answer_1: "Tikungan jalan yang sepi",
-          wrong_answer_2: "Tengah jalan tol",
-          wrong_answer_3: "Belakang bus yang sedang parkir",
-          explanation_normal: "Zebra cross adalah jalur khusus pejalan kaki menyeberang jalan.",
-          explanation_fast_trick: "Ingat garis hitam-putih Zebra Cross + aturan 4T!"
-        },
-
-        // --- PAI (10 SOAL) ---
-        {
-          id: "Q-PAI1-01",
-          materi_id: "PAI-S1-01",
+          id: "Q-PAI1-01", materi_id: "PAI-S1-01",
           question: "Tanda baca harakat garis di atas huruf Hijaiyah yang berbunyi 'a' disebut ...",
-          correct_answer: "Fathah",
-          wrong_answer_1: "Kasrah",
-          wrong_answer_2: "Dammah",
-          wrong_answer_3: "Sukun",
+          correct_answer: "Fathah", wrong_answer_1: "Kasrah", wrong_answer_2: "Dammah", wrong_answer_3: "Sukun",
           explanation_normal: "Fathah adalah harakat garis di atas yang menghasilkan bunyi vokal 'a'.",
           explanation_fast_trick: "Atas = Fathah (A), Bawah = Kasrah (I), Depan = Dammah (U)!"
         },
         {
-          id: "Q-PAI2-01",
-          materi_id: "PAI-S1-02",
-          question: "Berapakah jumlah Rukun Iman yang wajib diyakini umat Islam?",
-          correct_answer: "6 perkara",
-          wrong_answer_1: "5 perkara",
-          wrong_answer_2: "4 perkara",
-          wrong_answer_3: "7 perkara",
-          explanation_normal: "Rukun Iman berjumlah 6 perkara.",
-          explanation_fast_trick: "Rukun IMAN = 6 | Rukun ISLAM = 5!"
-        },
-        {
-          id: "Q-PAI3-01",
-          materi_id: "PAI-S1-03",
-          question: "Bacaan yang diucapkan sebelum memulai belajar atau makan adalah ...",
-          correct_answer: "Basmalah (Bismillahirrahmanirrahim)",
-          wrong_answer_1: "Hamdalah (Alhamdulillah)",
-          wrong_answer_2: "Istighfar",
-          wrong_answer_3: "Takbir",
-          explanation_normal: "Basmalah dibaca sebelum memulai setiap perbuatan baik.",
-          explanation_fast_trick: "Mulai = BISMILLAH!"
-        },
-        {
-          id: "Q-PAI4-01",
-          materi_id: "PAI-S1-04",
-          question: "Rukun Islam yang kedua adalah ...",
-          correct_answer: "Mendirikan salat",
-          wrong_answer_1: "Membayar zakat",
-          wrong_answer_2: "Puasa Ramadan",
-          wrong_answer_3: "Naik haji",
-          explanation_normal: "Urutan Rukun Islam: 1. Syahadat, 2. Salat, 3. Zakat, 4. Puasa, 5. Haji.",
-          explanation_fast_trick: "Jari ke-2 (Telunjuk) = SAlat!"
-        },
-        {
-          id: "Q-PAI5-01",
-          materi_id: "PAI-S1-05",
-          question: "Nabi Muhammad saw. diberi gelar 'Al-Amin' karena beliau selalu ...",
-          correct_answer: "Jujur dan dapat dipercaya",
-          wrong_answer_1: "Kaya raya",
-          wrong_answer_2: "Suka marah",
-          wrong_answer_3: "Paling tinggi",
-          explanation_normal: "Al-Amin artinya orang yang jujur dan dapat dipercaya.",
-          explanation_fast_trick: "Al-Amin = Jujur & Dapat Dipercaya!"
-        },
-        {
-          id: "Q-PAI6-01",
-          materi_id: "PAI-S2-01",
-          question: "Surah Al-Ikhlas terdiri dari berapa ayat?",
-          correct_answer: "4 ayat",
-          wrong_answer_1: "3 ayat",
-          wrong_answer_2: "5 ayat",
-          wrong_answer_3: "7 ayat",
-          explanation_normal: "Surah Al-Ikhlas memiliki 4 ayat yang menegaskan keesaan Allah Swt.",
-          explanation_fast_trick: "Al-Ikhlas = 4 ayat, Al-Fatihah = 7 ayat!"
-        },
-        {
-          id: "Q-PAI7-01",
-          materi_id: "PAI-S2-02",
-          question: "Asmaulhusna 'Ar-Rahman' memiliki arti Allah Maha ...",
-          correct_answer: "Pengasih",
-          wrong_answer_1: "Penyayang",
-          wrong_answer_2: "Pencipta",
-          wrong_answer_3: "Melihat",
-          explanation_normal: "Ar-Rahman artinya Allah Maha Pengasih kepada seluruh makhluk-Nya.",
-          explanation_fast_trick: "Ar-RahMAN = Maha PeNGASIH!"
-        },
-        {
-          id: "Q-PAI8-01",
-          materi_id: "PAI-S2-03",
-          question: "Saat diberi hadiah atau dibantu oleh teman, kita sebaiknya mengucapkan ...",
-          correct_answer: "Terima kasih",
-          wrong_answer_1: "Maaf",
-          wrong_answer_2: "Permisi",
-          wrong_answer_3: "Sampai jumpa",
-          explanation_normal: "Mengucapkan terima kasih adalah bentuk syukur dan penghargaan kepada sesama.",
-          explanation_fast_trick: "Dibantu orang → ucapkan Terima Kasih!"
-        },
-        {
-          id: "Q-PAI9-01",
-          materi_id: "PAI-S2-04",
-          question: "Jika tidak ditemukan air untuk berwudu, bersuci dapat diganti dengan cara ...",
-          correct_answer: "Tayamum menggunakan debu yang suci",
-          wrong_answer_1: "Mencuci tangan dengan tinta",
-          wrong_answer_2: "Mengelap muka dengan daun basah",
-          wrong_answer_3: "Langsung salat tanpa bersuci",
-          explanation_normal: "Tayamum memakai debu/tanah suci adalah keringanan pengganti wudu saat tidak ada air.",
-          explanation_fast_trick: "Tidak ada air → Tayamum pakai debu suci!"
-        },
-        {
-          id: "Q-PAI10-01",
-          materi_id: "PAI-S2-05",
-          question: "Siapakah nama nabi dan manusia pertama yang diciptakan oleh Allah Swt.?",
-          correct_answer: "Nabi Adam a.s.",
-          wrong_answer_1: "Nabi Nuh a.s.",
-          wrong_answer_2: "Nabi Ibrahim a.s.",
-          wrong_answer_3: "Nabi Musa a.s.",
-          explanation_normal: "Nabi Adam a.s. adalah manusia pertama sekaligus nabi pertama.",
-          explanation_fast_trick: "Manusia pertama = Nabi Adam a.s.!"
-        },
-
-        // --- BAHASA INGGRIS (7 SOAL) ---
-        {
-          id: "Q-ENG1-01",
-          materi_id: "ENG-S1-01",
+          id: "Q-ENG1-01", materi_id: "ENG-S1-01",
           question: "Sapaan yang tepat saat bertemu ibu guru di pagi hari adalah ...",
-          correct_answer: "Good morning",
-          wrong_answer_1: "Good night",
-          wrong_answer_2: "Good evening",
-          wrong_answer_3: "Goodbye",
+          correct_answer: "Good morning", wrong_answer_1: "Good night", wrong_answer_2: "Good evening", wrong_answer_3: "Goodbye",
           explanation_normal: "Good morning artinya selamat pagi.",
           explanation_fast_trick: "Morning = Pagi!"
-        },
-        {
-          id: "Q-ENG2-01",
-          materi_id: "ENG-S1-02",
-          question: "Bahasa Inggris dari angka '7' adalah ...",
-          correct_answer: "Seven",
-          wrong_answer_1: "Six",
-          wrong_answer_2: "Eight",
-          wrong_answer_3: "Nine",
-          explanation_normal: "6 = Six, 7 = Seven, 8 = Eight.",
-          explanation_fast_trick: "7 = Seven!"
-        },
-        {
-          id: "Q-ENG3-01",
-          materi_id: "ENG-S1-03",
-          question: "Apakah arti dari kata 'Eraser'?",
-          correct_answer: "Penghapus",
-          wrong_answer_1: "Penggaris",
-          wrong_answer_2: "Tas sekolah",
-          wrong_answer_3: "Meja",
-          explanation_normal: "Eraser berarti penghapus.",
-          explanation_fast_trick: "Eraser = Penghapus!"
-        },
-        {
-          id: "Q-ENG4-01",
-          materi_id: "ENG-S1-04",
-          question: "Bagaimana cara mengatakan 'Lingkaran biru' dalam bahasa Inggris?",
-          correct_answer: "Blue circle",
-          wrong_answer_1: "Circle blue",
-          wrong_answer_2: "Red square",
-          wrong_answer_3: "Yellow triangle",
-          explanation_normal: "Dalam bahasa Inggris, warna disebutkan sebelum bentuk: Blue circle.",
-          explanation_fast_trick: "Warna dulu (Blue) baru Bentuk (Circle)!"
-        },
-        {
-          id: "Q-ENG5-01",
-          materi_id: "ENG-S2-01",
-          question: "Bahasa Inggris untuk '3 ekor kucing' adalah ...",
-          correct_answer: "Three cats",
-          wrong_answer_1: "Three cat",
-          wrong_answer_2: "One cats",
-          wrong_answer_3: "Three dogs",
-          explanation_normal: "Karena jumlahnya lebih dari satu (3), kata 'cat' ditambah huruf -s menjadi 'cats'.",
-          explanation_fast_trick: "Lebih dari 1 hewan → tambah huruf -s!"
-        },
-        {
-          id: "Q-ENG6-01",
-          materi_id: "ENG-S2-02",
-          question: "Kata ganti yang tepat untuk melengkapi kalimat '... is my mother' adalah ...",
-          correct_answer: "She",
-          wrong_answer_1: "He",
-          wrong_answer_2: "It",
-          wrong_answer_3: "Book",
-          explanation_normal: "Mother adalah perempuan sehingga menggunakan kata ganti 'She'.",
-          explanation_fast_trick: "Perempuan pakai SHE, laki-laki pakai HE!"
-        },
-        {
-          id: "Q-ENG7-01",
-          materi_id: "ENG-S2-03",
-          question: "Arti kalimat 'I like watermelon' adalah ...",
-          correct_answer: "Saya suka semangka",
-          wrong_answer_1: "Saya suka pisang",
-          wrong_answer_2: "Saya suka jeruk",
-          wrong_answer_3: "Saya suka mangga",
-          explanation_normal: "Watermelon artinya buah semangka.",
-          explanation_fast_trick: "Water (air) + melon = Semangka!"
         }
       ]
     };
 
     /**
      * =====================================================================
-     * 3. STATE APLIKASI & INISIALISASI OFFLINE-FIRST
+     * 3. STATE APLIKASI, AUTH PEMBELI & SINKRONISASI CLOUD
      * =====================================================================
      */
     let appData = { materi: [], soal: [] };
-    let baseData = { materi: [], soal: [] };   // bawaan (kode) atau snapshot cloud
-    let customData = { materi: [], soal: [] }; // bab buatan user / hasil impor
-    let userProgress = { completed: [], scores: {} };
+    let baseData = { materi: [], soal: [] };
+    let customData = { materi: [], soal: [] };
+    let userProgress = { completed: [], scores: {}, mastered: [] };
+    let currentUser = null;
 
     let state = {
       selectedSemester: 1,
@@ -2314,6 +1382,8 @@
       activeTab: "ringkasan",
       quiz: {
         questions: [],
+        totalBankCount: 0,
+        masteredCount: 0,
         currentIndex: 0,
         scoreCount: 0,
         answered: false,
@@ -2341,21 +1411,153 @@
         hijaiyahIndex: 0,
         rukunImanIndex: 0,
         wuduStepIndex: 0,
-        syllableIdx: 0,
-        punctIdx: 0,
-        magicIdx: 0,
-        engGreetIdx: 0,
-        engNumIdx: 0,
-        engColorIdx: 0,
-        engFamIdx: 0
+        syllableIdx: 0
       }
     };
 
     document.addEventListener("DOMContentLoaded", () => {
       loadFromLocalStorageInstant();
+      const loggedIn = initAuthSession();
       renderHome();
-      syncDataFromCloud(false);
+      if (loggedIn) {
+        syncDataFromCloud(false);
+      }
     });
+
+    function isApiConfigured() {
+      return API_URL && API_URL.trim() !== "" && !API_URL.includes("PASTE_WEB_APP_URL");
+    }
+
+    function checkAdminMode() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("admin") === "1") {
+        const btn = document.getElementById("btn-admin-studio");
+        if (btn) {
+          btn.classList.remove("hidden");
+          btn.classList.add("flex");
+        }
+      }
+    }
+
+    function getUserProgressKey() {
+      return currentUser ? `pintarsd_k1_progress_${currentUser.user_id}` : STORAGE_KEYS.PROGRESS;
+    }
+
+    function initAuthSession() {
+      checkAdminMode();
+      const savedSession = readJson(STORAGE_KEYS.AUTH);
+      if (savedSession && savedSession.user_id) {
+        currentUser = savedSession;
+        applyLoggedInUI();
+        return true;
+      }
+      document.getElementById("login-gate").classList.remove("hidden");
+      return false;
+    }
+
+    function applyLoggedInUI() {
+      document.getElementById("login-gate").classList.add("hidden");
+      document.getElementById("btn-logout").classList.remove("hidden");
+      const heroTitle = document.getElementById("hero-greeting");
+      if (heroTitle && currentUser && currentUser.nama_anak) {
+        heroTitle.textContent = `Halo, ${currentUser.nama_anak}! 👋`;
+      }
+      const p = readJson(getUserProgressKey());
+      userProgress = {
+        completed: Array.isArray(p && p.completed) ? p.completed.filter(x => typeof x === "string") : [],
+        scores: (p && typeof p.scores === "object") ? p.scores : {},
+        mastered: Array.isArray(p && p.mastered) ? p.mastered.filter(x => typeof x === "string") : []
+      };
+    }
+
+    async function handleLoginSubmit(e) {
+      e.preventDefault();
+      const kode = document.getElementById("login-kode").value.trim().toUpperCase();
+      const pin = document.getElementById("login-pin").value.trim();
+      const errBox = document.getElementById("login-error");
+      const btn = document.getElementById("btn-login-submit");
+
+      errBox.classList.add("hidden");
+      btn.disabled = true;
+      btn.textContent = "Memeriksa akun...";
+
+      if (!isApiConfigured()) {
+        currentUser = { user_id: `LOCAL-${kode}`, nama_anak: kode, kode_akses: kode };
+        safeSet(STORAGE_KEYS.AUTH, JSON.stringify(currentUser));
+        applyLoggedInUI();
+        renderHome();
+        btn.disabled = false;
+        btn.textContent = "Masuk & Mulai Belajar";
+        return;
+      }
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          redirect: "follow",
+          body: JSON.stringify({ action: "login", kode_akses: kode, pin: pin })
+        });
+        const data = await res.json();
+        if (!data || !data.ok) {
+          errBox.textContent = (data && data.error) || "Kode Akses atau PIN salah.";
+          errBox.classList.remove("hidden");
+        } else {
+          currentUser = data.user;
+          safeSet(STORAGE_KEYS.AUTH, JSON.stringify(currentUser));
+          if (data.progress && typeof data.progress === "object") {
+            safeSet(getUserProgressKey(), JSON.stringify(data.progress));
+          }
+          applyLoggedInUI();
+          renderHome();
+          await syncDataFromCloud(false);
+          showToast(`Selamat belajar, ${currentUser.nama_anak}!`);
+        }
+      } catch (err) {
+        errBox.textContent = "Gagal terhubung ke server. Periksa koneksi internet kamu.";
+        errBox.classList.remove("hidden");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Masuk & Mulai Belajar";
+      }
+    }
+
+    let logoutConfirmTimer = null;
+    function handleLogout() {
+      const btn = document.getElementById("btn-logout");
+      if (btn.dataset.confirming !== "1") {
+        btn.dataset.confirming = "1";
+        btn.textContent = "Yakin Keluar?";
+        logoutConfirmTimer = setTimeout(() => {
+          btn.dataset.confirming = "0";
+          btn.textContent = "Keluar";
+        }, 3000);
+        return;
+      }
+      clearTimeout(logoutConfirmTimer);
+      btn.dataset.confirming = "0";
+      btn.textContent = "Keluar";
+      try { localStorage.removeItem(STORAGE_KEYS.AUTH); } catch (e) {}
+      currentUser = null;
+      btn.classList.add("hidden");
+      document.getElementById("login-kode").value = "";
+      document.getElementById("login-pin").value = "";
+      document.getElementById("login-gate").classList.remove("hidden");
+    }
+
+    function persistProgress() {
+      safeSet(getUserProgressKey(), JSON.stringify(userProgress));
+      if (isApiConfigured() && currentUser && navigator.onLine) {
+        fetch(API_URL, {
+          method: "POST",
+          redirect: "follow",
+          body: JSON.stringify({
+            action: "saveProgress",
+            user_id: currentUser.user_id,
+            progress: userProgress
+          })
+        }).catch(() => {});
+      }
+    }
 
     function rebuildAppData() {
       const baseIds = new Set(baseData.materi.map(m => m.id));
@@ -2371,27 +1573,16 @@
     }
 
     function loadContent() {
-      // 1) Konten dasar: snapshot cloud (jika ada & valid), kalau tidak, bawaan dari kode.
       baseData = normalizeData(DEFAULT_DATA);
       const cloud = readJson(STORAGE_KEYS.CLOUD);
       if (cloud && Array.isArray(cloud.materi)) {
         const c = normalizeData(cloud);
         if (c.materi.length > 0) baseData = c;
       }
-      // 2) Data user. Migrasi sekali dari key lama (v11): hanya bab yang BUKAN bawaan.
       let custom = readJson(STORAGE_KEYS.CUSTOM);
       if (!custom) {
         custom = { materi: [], soal: [] };
-        const legacy = readJson(STORAGE_KEYS.LEGACY_CONTENT);
-        if (legacy && Array.isArray(legacy.materi)) {
-          const defM = new Set(DEFAULT_DATA.materi.map(m => m.id));
-          const defQ = new Set(DEFAULT_DATA.soal.map(q => q.id));
-          const l = normalizeData(legacy);
-          custom = { materi: l.materi.filter(m => !defM.has(m.id)), soal: l.soal.filter(q => !defQ.has(q.id)) };
-        }
-        if (safeSet(STORAGE_KEYS.CUSTOM, JSON.stringify(custom))) {
-          try { localStorage.removeItem(STORAGE_KEYS.LEGACY_CONTENT); } catch (e) {}
-        }
+        safeSet(STORAGE_KEYS.CUSTOM, JSON.stringify(custom));
       }
       customData = normalizeData(custom);
       rebuildAppData();
@@ -2404,18 +1595,11 @@
         customData = { materi: [], soal: [] };
         rebuildAppData();
       }
-      const p = readJson(STORAGE_KEYS.PROGRESS);
-      if (p && typeof p === "object") {
-        userProgress = {
-          completed: Array.isArray(p.completed) ? p.completed.filter(x => typeof x === "string") : [],
-          scores: p.scores && typeof p.scores === "object" ? p.scores : {}
-        };
-      }
       updateSyncBadge("offline");
     }
 
     async function syncDataFromCloud(isManual) {
-      if (!API_URL || API_URL.trim() === "") {
+      if (!isApiConfigured()) {
         updateSyncBadge("offline");
         if (isManual) showToast("Mode Offline aktif! Seluruh bab Kelas 1 sudah tersimpan di HP.");
         return;
@@ -2423,22 +1607,21 @@
 
       updateSyncBadge("syncing");
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       try {
-        const res = await fetch(API_URL, { method: "GET", signal: controller.signal, cache: "no-store" });
+        const res = await fetch(API_URL, { method: "GET", redirect: "follow", signal: controller.signal, cache: "no-store" });
         clearTimeout(timeoutId);
         if (!res.ok) throw new Error("HTTP Error");
         const cloudJson = await res.json();
         const cleanCloud = (cloudJson && Array.isArray(cloudJson.materi)) ? normalizeData(cloudJson) : null;
         if (cleanCloud && cleanCloud.materi.length > 0) {
-          // Cloud hanya mengganti konten dasar. Bab buatan user tetap aman.
           baseData = cleanCloud;
           safeSet(STORAGE_KEYS.CLOUD, JSON.stringify(cleanCloud));
           rebuildAppData();
           updateSyncBadge("synced");
           renderHome();
-          if (isManual) showToast("Materi terbaru berhasil diperbarui!");
+          if (isManual) showToast(`Berhasil sinkronisasi ${cleanCloud.materi.length} bab & ${cleanCloud.soal.length} soal!`);
         } else {
           updateSyncBadge("offline");
         }
@@ -2456,7 +1639,7 @@
       if (status === "syncing") {
         badge.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200";
         dot.className = "w-2 h-2 rounded-full bg-amber-500 animate-ping";
-        text.textContent = "Mengecek...";
+        text.textContent = "Sinkron...";
       } else if (status === "synced") {
         badge.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold bg-sky-50 text-sky-700 border border-sky-200";
         dot.className = "w-2 h-2 rounded-full bg-sky-500";
@@ -2564,12 +1747,16 @@
         return;
       }
 
+      const masteredSet = new Set(userProgress.mastered || []);
+
       container.innerHTML = Object.entries(grouped).map(([mapel, chapters]) => {
         const theme = getSubjectTheme(mapel);
         const cardsHtml = chapters.map(chap => {
           const isDone = userProgress.completed.includes(chap.id);
           const bestScore = userProgress.scores[chap.id];
-          const qCount = appData.soal.filter(s => s.materi_id === chap.id).length;
+          const chapQuestions = appData.soal.filter(s => s.materi_id === chap.id);
+          const qCount = chapQuestions.length;
+          const masteredCount = chapQuestions.filter(s => masteredSet.has(s.id)).length;
 
           return `
             <div onclick="openChapter('${esc(chap.id)}')"
@@ -2584,7 +1771,7 @@
                 <p class="text-sm text-slate-500 font-medium line-clamp-2">${esc(chap.deskripsi)}</p>
               </div>
               <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                <span class="text-xs font-bold text-slate-400">${qCount} Soal</span>
+                <span class="text-xs font-bold text-slate-400">${masteredCount}/${qCount} Soal Dikuasai</span>
                 <span class="min-h-[46px] px-4 py-2.5 rounded-2xl bg-sky-50 group-hover:bg-sky-600 text-sky-700 group-hover:text-white font-extrabold text-sm flex items-center gap-1 transition">
                   <span>Belajar</span><span>→</span>
                 </span>
@@ -2638,7 +1825,7 @@
       } else {
         userProgress.completed.splice(idx, 1);
       }
-      safeSet(STORAGE_KEYS.PROGRESS, JSON.stringify(userProgress));
+      persistProgress();
       updateCompleteButtonUI();
     }
 
@@ -2764,9 +1951,6 @@
       if (chap && box) box.innerHTML = getInteractiveSvgHtml(chap.visual_type);
     }
 
-    /**
-     * Alat peraga cadangan & kosakata Inggris (data dari kode, bukan dari JSON luar).
-     */
     const VISUALS_WITH_HANDLER = new Set([
       "pancasila_colors", "pancasila_house_map", "pancasila_symbols", "pancasila_rules",
       "pancasila_diversity", "pancasila_gotong_royong", "jarimatika_hand", "jarimatika_tens",
@@ -2888,7 +2072,6 @@
     }
 
     function getInteractiveSvgHtml(visualType) {
-      // 0A. Pendidikan Pancasila: Warna Perisai Garuda
       if (visualType === "pancasila_colors") {
         const parts = [
           { part: "⭐ Tengah Perisai (Bintang)", color: "Hitam", hex: "#1E293B", meaning: "Melambangkan warna alam semesta dan cahaya Tuhan Yang Maha Esa." },
@@ -2917,7 +2100,6 @@
         `;
       }
 
-      // 0B. Pendidikan Pancasila: Bagian Rumah & Tetangga
       if (visualType === "pancasila_house_map") {
         const rooms = [
           { icon: "🛋️", name: "Ruang Tamu", desc: "Tempat menerima tamu dengan ramah dan sopan." },
@@ -2945,7 +2127,6 @@
         `;
       }
 
-      // 1. Pendidikan Pancasila Bab 1: 5 Simbol Garuda Pancasila
       if (visualType === "pancasila_symbols") {
         const silas = [
           { no: 1, icon: "⭐", symbol: "Bintang Emas", text: "Ketuhanan Yang Maha Esa", act: "Berdoa sebelum belajar & rajin beribadah." },
@@ -2975,7 +2156,6 @@
         `;
       }
 
-      // 2. Pendidikan Pancasila Bab 2: Aturan di Rumah & Sekolah
       if (visualType === "pancasila_rules") {
         const locs = [
           { place: "🏠 Di Rumah", rules: "1. Merapikan tempat tidur • 2. Pamit & cium tangan orang tua • 3. Meletakkan sepatu di rak." },
@@ -3001,7 +2181,6 @@
         `;
       }
 
-      // 3. Pendidikan Pancasila Bab 3: Keberagaman & Bhinneka Tunggal Ika
       if (visualType === "pancasila_diversity") {
         const cards = [
           { icon: "🪪", title: "Identitas Diriku", desc: "Nama lengkap, nama panggilan, umur, alamat rumah, dan nama ayah ibu." },
@@ -3028,7 +2207,6 @@
         `;
       }
 
-      // 4. Pendidikan Pancasila Bab 4: Gotong Royong
       if (visualType === "pancasila_gotong_royong") {
         const acts = [
           { icon: "🧹", title: "Piket Kelas Bersama", benefit: "Kelas cepat bersih, debu hilang, dan belajar menjadi nyaman!" },
@@ -3055,7 +2233,6 @@
         `;
       }
 
-      // 5. Jarimatika Tangan Kanan (1 - 9)
       if (visualType === "jarimatika_hand") {
         const n = state.visualState.jariNumber;
         const thumbOpen = n >= 5;
@@ -3094,7 +2271,6 @@
         `;
       }
 
-      // 6. Jarimatika Puluhan Tangan Kiri (10 - 90)
       if (visualType === "jarimatika_tens") {
         const t = state.visualState.jariTens;
         const unit = t / 10;
@@ -3132,7 +2308,6 @@
         `;
       }
 
-      // 7. Jarimatika Kombinasi Dua Tangan (11 - 99)
       if (visualType === "jarimatika_combo") {
         const tens = state.visualState.comboTens;
         const ones = state.visualState.comboOnes;
@@ -3167,7 +2342,6 @@
         `;
       }
 
-      // 8. Jarimatika Perkalian 9 (10 Jari Interaktif)
       if (visualType === "jarimatika_mul9") {
         const f = state.visualState.mulFactor9;
         const leftCount = f - 1;
@@ -3206,7 +2380,6 @@
         `;
       }
 
-      // 9. Jarimatika Pembagian 9
       if (visualType === "jarimatika_div9") {
         const dividend = state.visualState.divDividend9;
         const ans = dividend / 9;
@@ -3233,7 +2406,6 @@
         `;
       }
 
-      // 10. Diagram Gambar (Piktogram)
       if (visualType === "pictograph_fruits") {
         const { pictoApples, pictoBananas, pictoOranges } = state.visualState;
         return `
@@ -3261,7 +2433,6 @@
         `;
       }
 
-      // 11. Bangun Datar 2D
       if (visualType === "shapes_2d") {
         return `
           <div class="grid grid-cols-3 gap-4 w-full max-w-md text-center">
@@ -3284,7 +2455,6 @@
         `;
       }
 
-      // 12. Mengukur Panjang
       if (visualType === "measure_length") {
         return `
           <svg viewBox="0 0 360 130" class="w-full max-w-md h-auto">
@@ -3297,7 +2467,6 @@
         `;
       }
 
-      // 13. Huruf Hijaiyah
       if (visualType === "pai_hijaiyah") {
         const letters = [
           { arab: "اَ - اِ - اُ", latin: "A - I - U (Alif)" },
@@ -3324,7 +2493,6 @@
         `;
       }
 
-      // 14. Rukun Iman
       if (visualType === "pai_rukun_iman") {
         const list = [
           "1. Iman kepada Allah Swt.",
@@ -3352,7 +2520,6 @@
         `;
       }
 
-      // 15. Tata Cara Wudu
       if (visualType === "pai_wudu") {
         const steps = [
           { no: 1, title: "Niat & Cuci Telapak Tangan", desc: "Baca Basmalah sambil membasuh kedua telapak tangan 3 kali." },
@@ -3382,7 +2549,6 @@
         `;
       }
 
-      // 16. Suku Kata & Kata Ajaib
       if (visualType === "syllable_builder" || visualType === "magic_words") {
         const words = visualType === "magic_words"
           ? [
@@ -3418,17 +2584,14 @@
         `;
       }
 
-      // 17. Bahasa Inggris (Warna / Angka / Sapaan / Keluarga)
       if (Object.prototype.hasOwnProperty.call(VOCAB_SETS, visualType)) {
         return getVocabDeckHtml(visualType);
       }
 
-      // Tipe tanpa alat peraga khusus: kartu poin penting dari bab itu sendiri (bukan apel).
       if (visualType !== "counting_apples") {
         return getPointDeckHtml();
       }
 
-      // 18. Default Keranjang Apel Interaktif (1 - 10)
       const count = state.visualState.appleCount;
       let applesSvg = "";
       for (let i = 0; i < count; i++) {
@@ -3460,7 +2623,7 @@
 
     /**
      * =====================================================================
-     * 6. LATIHAN SOAL & PEMBAHASAN INSTAN (OFFLINE-READY)
+     * 6. LATIHAN SOAL & PEMBAHASAN INSTAN (10 SOAL ACAK PER SESI)
      * =====================================================================
      */
     function shuffleArray(arr) {
@@ -3483,13 +2646,21 @@
         return;
       }
 
-      const prepared = shuffleArray(rawQuestions).map(q => ({
+      // Prioritaskan soal yang belum pernah dijawab benar agar 100 soal tergarap merata
+      const masteredSet = new Set(userProgress.mastered || []);
+      const unmastered = rawQuestions.filter(q => !masteredSet.has(q.id));
+      const pool = unmastered.length > 0 ? unmastered : rawQuestions;
+      const sessionQuestions = shuffleArray(pool).slice(0, 10);
+
+      const prepared = sessionQuestions.map(q => ({
         ...q,
         options: shuffleArray([q.correct_answer, q.wrong_answer_1, q.wrong_answer_2, q.wrong_answer_3])
       }));
 
       state.quiz = {
         questions: prepared,
+        totalBankCount: rawQuestions.length,
+        masteredCount: rawQuestions.length - unmastered.length,
         currentIndex: 0,
         scoreCount: 0,
         answered: false,
@@ -3508,26 +2679,32 @@
         const pct = Math.round((qState.scoreCount / total) * 100);
         const stars = pct >= 80 ? "⭐⭐⭐" : pct >= 50 ? "⭐⭐" : "⭐";
 
-        const prevBest = userProgress.scores[state.activeMateriId] || 0;
+        const prevBest = Number(userProgress.scores[state.activeMateriId]) || 0;
         if (pct >= prevBest) userProgress.scores[state.activeMateriId] = pct;
         if (pct >= 60 && !userProgress.completed.includes(state.activeMateriId)) {
           userProgress.completed.push(state.activeMateriId);
           updateCompleteButtonUI();
         }
-        safeSet(STORAGE_KEYS.PROGRESS, JSON.stringify(userProgress));
+        persistProgress();
+        renderHome();
+
+        const rawQuestions = appData.soal.filter(s => s.materi_id === state.activeMateriId);
+        const masteredSet = new Set(userProgress.mastered || []);
+        const nowMastered = rawQuestions.filter(q => masteredSet.has(q.id)).length;
 
         container.innerHTML = `
           <div class="bg-white rounded-3xl p-6 sm:p-8 border-2 border-amber-200 text-center space-y-5 animate-pop">
             <div class="text-5xl">${stars}</div>
             <div>
               <span class="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-black">HASIL LATIHAN</span>
-              <h2 class="text-2xl sm:text-3xl font-black text-slate-800 mt-2">Skor Kamu: ${pct}%</h2>
+              <h2 class="text-2xl sm:text-3xl font-black text-slate-800 mt-2">Skor Sesi Ini: ${pct}%</h2>
               <p class="text-base font-bold text-slate-500 mt-1">Benar ${qState.scoreCount} dari ${total} soal!</p>
+              <p class="text-xs font-extrabold text-emerald-700 mt-2">Total Penguasaan Bab: ${nowMastered} dari ${rawQuestions.length} soal</p>
             </div>
             <div class="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
               <button onclick="startQuizForChapter('${state.activeMateriId}')"
                 class="min-h-[48px] w-full sm:w-auto px-6 py-3 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-sm">
-                🔄 Ulangi Latihan (Acak Soal)
+                🔄 Latihan Set Berikutnya (Acak Soal)
               </button>
               <button onclick="goHome()"
                 class="min-h-[48px] w-full sm:w-auto px-6 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-sm">
@@ -3545,9 +2722,12 @@
 
       container.innerHTML = `
         <div class="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 space-y-5 animate-pop">
-          <div class="flex items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
             <span class="px-3 py-1 rounded-full bg-sky-100 text-sky-800 text-xs font-black">
               Soal ${qState.currentIndex + 1} dari ${qState.questions.length}
+            </span>
+            <span class="text-xs font-bold text-slate-400">
+              Bank Soal Bab: ${qState.totalBankCount} Soal
             </span>
             <span class="text-xs font-extrabold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
               Benar: ${qState.scoreCount}
@@ -3616,7 +2796,13 @@
       if (selectedOpt === undefined) return;
       state.quiz.answered = true;
       state.quiz.selectedOption = selectedOpt;
-      if (selectedOpt === cur.correct_answer) state.quiz.scoreCount += 1;
+      if (selectedOpt === cur.correct_answer) {
+        state.quiz.scoreCount += 1;
+        if (!Array.isArray(userProgress.mastered)) userProgress.mastered = [];
+        if (!userProgress.mastered.includes(cur.id)) {
+          userProgress.mastered.push(cur.id);
+        }
+      }
       renderQuizUI();
     }
 
@@ -3633,7 +2819,7 @@
 
     /**
      * =====================================================================
-     * 7. STUDIO TAMBAH & UPLOAD MATERI MANDIRI (.JSON)
+     * 7. STUDIO TAMBAH & UPLOAD MATERI MANDIRI (.JSON - KHUSUS ADMIN)
      * =====================================================================
      */
     function openStudioModal() {
@@ -3709,7 +2895,7 @@
       const cleanM = normalizeMateri(newMateri);
       const cleanS = normalizeSoal(newSoal);
       if (!cleanM || !cleanS) {
-        showToast("Isi form belum lengkap, atau ada pilihan jawaban yang sama. Keempat pilihan harus berbeda.");
+        showToast("Isi form belum lengkap, atau ada pilihan jawaban yang sama.");
         return;
       }
       customData.materi.unshift(cleanM);
@@ -3763,8 +2949,7 @@
           rebuildAppData();
           closeStudioModal();
           renderHome();
-          const skipped = uploaded.materi.length - newM.length;
-          showToast(`Impor selesai: ${newM.length} bab baru, ${newS.length} soal.` + (skipped > 0 ? ` ${skipped} bab dilewati (ID sudah ada atau tidak valid).` : ""));
+          showToast(`Impor selesai: ${newM.length} bab baru, ${newS.length} soal.`);
         } catch (err) {
           showToast("Gagal membaca file JSON.");
         } finally {
@@ -3787,8 +2972,23 @@
       showToast("Paket materi JSON berhasil diunduh!");
     }
 
+    let resetConfirmTimer = null;
     function resetToDefaultContent() {
-      if (!confirm("Hapus semua bab buatan sendiri dan data cloud yang tersimpan? Progres belajar tidak ikut terhapus.")) return;
+      const btn = document.getElementById("btn-reset-default");
+      if (btn && btn.dataset.confirming !== "1") {
+        btn.dataset.confirming = "1";
+        btn.textContent = "Klik sekali lagi untuk konfirmasi reset";
+        resetConfirmTimer = setTimeout(() => {
+          btn.dataset.confirming = "0";
+          btn.textContent = "Reset Data Bawaan";
+        }, 3000);
+        return;
+      }
+      clearTimeout(resetConfirmTimer);
+      if (btn) {
+        btn.dataset.confirming = "0";
+        btn.textContent = "Reset Data Bawaan";
+      }
       try {
         localStorage.removeItem(STORAGE_KEYS.CUSTOM);
         localStorage.removeItem(STORAGE_KEYS.CLOUD);
@@ -3801,7 +3001,6 @@
       showToast("Materi dikembalikan ke bawaan.");
     }
 
-    // Service worker: hanya jalan di http(s). Dibuka lewat file:// akan dilewati.
     if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("./sw.js").catch(() => {});
