@@ -68,6 +68,11 @@
           <span>+ Tambah Materi</span>
         </button>
 
+        <button id="btn-pantau" onclick="openPantau()" title="Pantau belajar"
+          class="min-h-[44px] px-3.5 py-2 rounded-2xl bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 font-extrabold text-xs sm:text-sm border border-indigo-200 flex items-center gap-1.5 transition">
+          <span>📊</span><span>Pantau</span>
+        </button>
+
         <button id="btn-sync" onclick="syncDataFromCloud(true)" title="Update Materi & Soal"
           class="min-h-[44px] min-w-[44px] px-3 py-2 rounded-2xl bg-sky-50 hover:bg-sky-100 active:scale-95 text-sky-700 font-extrabold text-xs sm:text-sm border border-sky-200 flex items-center justify-center transition">
           <svg id="sync-icon" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -201,6 +206,9 @@
 
       <div id="study-tab-content" class="animate-pop"></div>
     </section>
+  
+    <!-- VIEW 3: PANTAU BELAJAR -->
+    <section id="view-pantau" class="hidden space-y-5 animate-pop"></section>
   </main>
 
   <!-- LAYAR LOGIN PEMBELI -->
@@ -1466,7 +1474,10 @@
       userProgress = {
         completed: Array.isArray(p && p.completed) ? p.completed.filter(x => typeof x === "string") : [],
         scores: (p && typeof p.scores === "object") ? p.scores : {},
-        mastered: Array.isArray(p && p.mastered) ? p.mastered.filter(x => typeof x === "string") : []
+        mastered: Array.isArray(p && p.mastered) ? p.mastered.filter(x => typeof x === "string") : [],
+        stats: (p && p.stats && typeof p.stats === "object" && !Array.isArray(p.stats)) ? p.stats : {},
+        weak: Array.isArray(p && p.weak) ? p.weak.filter(x => typeof x === "string") : [],
+        daily: (p && p.daily && typeof p.daily === "object" && !Array.isArray(p.daily)) ? p.daily : {}
       };
     }
 
@@ -1668,6 +1679,7 @@
      */
     function goHome() {
       state.activeMateriId = null;
+      document.getElementById("view-pantau").classList.add("hidden");
       document.getElementById("view-study").classList.add("hidden");
       document.getElementById("view-home").classList.remove("hidden");
       renderHome();
@@ -1810,6 +1822,7 @@
       updateCompleteButtonUI();
 
       document.getElementById("view-home").classList.add("hidden");
+      document.getElementById("view-pantau").classList.add("hidden");
       document.getElementById("view-study").classList.remove("hidden");
       switchStudyTab("ringkasan");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2649,7 +2662,12 @@
       // Prioritaskan soal yang belum pernah dijawab benar agar 100 soal tergarap merata
       const masteredSet = new Set(userProgress.mastered || []);
       const unmastered = rawQuestions.filter(q => !masteredSet.has(q.id));
-      const pool = unmastered.length > 0 ? unmastered : rawQuestions;
+      let pool = unmastered.length > 0 ? unmastered : rawQuestions;
+      if (window.__weakNext) {
+        window.__weakNext = false;
+        const wk = rawQuestions.filter(q => (userProgress.weak || []).includes(q.id));
+        if (wk.length) pool = wk;
+      }
       const sessionQuestions = shuffleArray(pool).slice(0, 10);
 
       const prepared = sessionQuestions.map(q => ({
@@ -2796,6 +2814,7 @@
       if (selectedOpt === undefined) return;
       state.quiz.answered = true;
       state.quiz.selectedOption = selectedOpt;
+      trackAnswer(cur, selectedOpt === cur.correct_answer);
       if (selectedOpt === cur.correct_answer) {
         state.quiz.scoreCount += 1;
         if (!Array.isArray(userProgress.mastered)) userProgress.mastered = [];
@@ -2999,6 +3018,177 @@
       closeStudioModal();
       renderHome();
       showToast("Materi dikembalikan ke bawaan.");
+    }
+
+
+    /**
+     * =====================================================================
+     * PANTAU BELAJAR (progres per mapel, paham / belum paham per bab)
+     * =====================================================================
+     */
+    let pantauMapel = "SEMUA";
+    const PANTAU_LBL = {
+      paham:  ["✅", "Paham", "bg-emerald-100 text-emerald-800"],
+      hampir: ["🔄", "Hampir paham", "bg-amber-100 text-amber-800"],
+      belum:  ["⚠️", "Belum paham", "bg-rose-100 text-rose-800"],
+      baru:   ["🌱", "Baru mulai", "bg-sky-100 text-sky-800"],
+      nol:    ["⬜", "Belum dicoba", "bg-slate-100 text-slate-600"]
+    };
+    function todayKey() { return new Date().toLocaleDateString("sv-SE"); }
+
+    function trackAnswer(q, ok) {
+      const p = userProgress;
+      if (!p.stats || typeof p.stats !== "object") p.stats = {};
+      if (!Array.isArray(p.weak)) p.weak = [];
+      if (!p.daily || typeof p.daily !== "object") p.daily = {};
+      const x = p.stats[q.materi_id] || (p.stats[q.materi_id] = { n: 0, ok: 0, r: [] });
+      x.n++; if (ok) x.ok++;
+      x.r = [...(x.r || []), ok ? 1 : 0].slice(-10);
+      const w = p.weak.indexOf(q.id);
+      if (ok) { if (w > -1) p.weak.splice(w, 1); }
+      else if (w < 0) { p.weak.push(q.id); if (p.weak.length > 300) p.weak.shift(); }
+      const d = todayKey(), y = p.daily[d] || (p.daily[d] = [0, 0]);
+      y[0]++; if (ok) y[1]++;
+      Object.keys(p.daily).sort().slice(0, -30).forEach(k => delete p.daily[k]);
+      safeSet(getUserProgressKey(), JSON.stringify(p));
+    }
+
+    // Paham = min. 5 jawaban, dilihat dari 10 jawaban terakhir per bab
+    function pantauStatus(mid) {
+      const x = (userProgress.stats || {})[mid] || { n: 0, r: [] };
+      const r = x.r || [];
+      const acc = r.length ? r.reduce((a, b) => a + b, 0) / r.length : null;
+      const k = !x.n ? "nol" : x.n < 5 ? "baru" : acc >= 0.8 ? "paham" : acc >= 0.6 ? "hampir" : "belum";
+      return { n: x.n, acc, k };
+    }
+    function pantauChip(k) {
+      const l = PANTAU_LBL[k];
+      return `<span class="px-2.5 py-0.5 rounded-lg text-xs font-extrabold whitespace-nowrap ${l[2]}">${l[0]} ${l[1]}</span>`;
+    }
+    function selectPantauMapel(m) { pantauMapel = m; renderPantau(); }
+    function startWeakQuiz(id) {
+      openChapter(id);
+      window.__weakNext = true;
+      switchStudyTab("latihan");
+    }
+    function openPantau() {
+      state.activeMateriId = null;
+      document.getElementById("view-home").classList.add("hidden");
+      document.getElementById("view-study").classList.add("hidden");
+      document.getElementById("view-pantau").classList.remove("hidden");
+      renderPantau();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function renderPantau() {
+      const box = document.getElementById("view-pantau");
+      const all = appData.materi, pm = pantauMapel;
+      const mapels = ["SEMUA", ...new Set(all.map(m => m.mapel))];
+      if (!mapels.includes(pm)) pantauMapel = "SEMUA";
+      const ms = pantauMapel === "SEMUA" ? all : all.filter(m => m.mapel === pantauMapel);
+      const ids = new Set(ms.map(m => m.id));
+      const stats = userProgress.stats || {}, weak = userProgress.weak || [], daily = userProgress.daily || {};
+      const mastered = new Set(userProgress.mastered || []);
+
+      let tot = 0, okT = 0;
+      ms.forEach(m => { const x = stats[m.id]; if (x) { tot += x.n; okT += x.ok; } });
+      const soalIn = appData.soal.filter(q => ids.has(q.materi_id));
+      const masteredN = soalIn.filter(q => mastered.has(q.id)).length;
+      const doneN = ms.filter(m => userProgress.completed.includes(m.id)).length;
+
+      const info = ms.map(m => {
+        const qs = appData.soal.filter(q => q.materi_id === m.id);
+        return { m, s: pantauStatus(m.id), q: qs.length, mm: qs.filter(q => mastered.has(q.id)).length, w: qs.filter(q => weak.includes(q.id)).length };
+      });
+      const bad = info.filter(x => x.s.k === "belum" || x.s.k === "hampir").sort((a, b) => a.s.acc - b.s.acc);
+
+      const days = [...Array(14)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 13 + i); return d.toLocaleDateString("sv-SE"); });
+      const mx = Math.max(5, ...days.map(d => (daily[d] || [0])[0]));
+      let streak = 0; const d0 = new Date();
+      if (!(daily[todayKey()] || [0])[0]) d0.setDate(d0.getDate() - 1);
+      while ((daily[d0.toLocaleDateString("sv-SE")] || [0])[0] > 0) { streak++; d0.setDate(d0.getDate() - 1); }
+
+      const byMapel = {};
+      info.forEach(x => (byMapel[x.m.mapel] = byMapel[x.m.mapel] || []).push(x));
+      const name = (currentUser && currentUser.nama_anak) ? currentUser.nama_anak : "";
+      const isAll = pantauMapel === "SEMUA";
+
+      box.innerHTML = `
+        <div class="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex items-center gap-3">
+          <button onclick="goHome()" aria-label="Kembali"
+            class="min-h-[48px] min-w-[48px] rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 flex items-center justify-center text-slate-700 shrink-0 transition">
+            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+          </button>
+          <div>
+            <h2 class="text-xl font-black text-slate-800 leading-snug">📊 Pantau Belajar ${esc(name)}</h2>
+            <p class="text-xs font-bold text-slate-500">Ringkasan untuk orang tua</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+          ${mapels.map(mp => {
+            const on = pantauMapel === mp;
+            const th = mp === "SEMUA" ? { icon: "✨" } : getSubjectTheme(mp);
+            return `<button data-mapel="${esc(mp)}" onclick="selectPantauMapel(this.dataset.mapel)"
+              class="min-h-[44px] px-4 py-2 rounded-2xl font-extrabold text-xs sm:text-sm whitespace-nowrap border-2 transition flex items-center gap-1.5 shrink-0 ${on ? 'bg-sky-600 border-sky-600 text-white shadow-2xs' : 'bg-white border-slate-200 text-slate-700 hover:border-sky-300'}">
+              <span>${th.icon}</span><span>${mp === "SEMUA" ? "Semua Mapel" : esc(mp)}</span></button>`;
+          }).join("")}
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-white rounded-3xl p-4 border border-slate-200/90"><div class="text-2xl font-black text-slate-800">${doneN}/${ms.length}</div><div class="text-xs font-bold text-slate-500">Bab selesai</div></div>
+          <div class="bg-white rounded-3xl p-4 border border-slate-200/90"><div class="text-2xl font-black text-slate-800">${tot ? Math.round(okT / tot * 100) : 0}%</div><div class="text-xs font-bold text-slate-500">Akurasi (${tot} jawaban)</div></div>
+          <div class="bg-white rounded-3xl p-4 border border-slate-200/90"><div class="text-2xl font-black text-slate-800">${masteredN}/${soalIn.length}</div><div class="text-xs font-bold text-slate-500">Soal dikuasai</div></div>
+          ${isAll
+            ? `<div class="bg-white rounded-3xl p-4 border border-slate-200/90"><div class="text-2xl font-black text-slate-800">🔥 ${streak} hari</div><div class="text-xs font-bold text-slate-500">Belajar beruntun</div></div>`
+            : `<div class="bg-white rounded-3xl p-4 border border-slate-200/90"><div class="text-2xl font-black text-slate-800">${bad.length}</div><div class="text-xs font-bold text-slate-500">Bab perlu diulang</div></div>`}
+        </div>
+
+        ${isAll ? `
+        <div class="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90">
+          <h3 class="font-black text-slate-800">Aktivitas 14 hari</h3>
+          <div class="flex items-end gap-1.5 h-28 mt-3" role="img" aria-label="Aktivitas 14 hari terakhir, jumlah soal dijawab per hari">
+            ${days.map(d => {
+              const [n, ok] = daily[d] || [0, 0];
+              return `<div class="flex-1 h-full flex flex-col justify-end items-center gap-1" title="${d}: ${ok} benar dari ${n}">
+                <div class="w-full rounded-t-md bg-rose-200 flex items-end" style="height:${n / mx * 100}%;min-height:3px"><div class="w-full rounded-t-md bg-emerald-500" style="height:${n ? ok / n * 100 : 0}%"></div></div>
+                <span class="text-[10px] font-bold text-slate-400">${Number(d.slice(8))}</span></div>`;
+            }).join("")}
+          </div>
+          <p class="text-xs font-bold text-slate-400 mt-2">Hijau = benar, merah muda = salah. Tinggi batang = jumlah soal per hari.</p>
+        </div>` : `<p class="text-xs font-bold text-slate-400 px-1">Grafik harian hanya tersedia untuk Semua Mapel.</p>`}
+
+        <div class="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+          <h3 class="font-black text-slate-800">⚠️ Perlu diulang</h3>
+          ${bad.length ? bad.slice(0, 5).map(x => `
+            <div class="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 first:border-0 first:pt-0">
+              <div class="min-w-0">
+                <div class="font-extrabold text-sm text-slate-800 leading-snug">${esc(x.m.bab)}</div>
+                <div class="flex flex-wrap items-center gap-2 mt-1">${pantauChip(x.s.k)}<span class="text-xs font-bold text-slate-500">${Math.round(x.s.acc * 100)}% benar • ${x.w} soal salah</span></div>
+              </div>
+              <button data-id="${esc(x.m.id)}" onclick="startWeakQuiz(this.dataset.id)"
+                class="min-h-[44px] px-4 rounded-2xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-extrabold text-sm border border-sky-200 shrink-0">Latih</button>
+            </div>`).join("")
+            : `<p class="text-sm font-semibold text-slate-500">${tot < 5 ? "Belum cukup jawaban. Mulai latihan dulu, minimal 5 soal per bab." : "Tidak ada bab yang bermasalah. Mantap!"}</p>`}
+        </div>
+
+        ${Object.entries(byMapel).map(([mp, xs]) => {
+          const th = getSubjectTheme(mp);
+          return `<div class="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+            <div class="flex items-center gap-2"><span class="text-xl">${th.icon}</span><h3 class="font-black text-slate-800 uppercase tracking-wide text-sm">${esc(mp)}</h3></div>
+            ${xs.map(x => `
+              <button data-id="${esc(x.m.id)}" onclick="openChapter(this.dataset.id)" class="block w-full text-left space-y-1.5">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-sm font-bold text-slate-700 leading-snug">${esc(x.m.bab)}</span>${pantauChip(x.s.k)}
+                </div>
+                <div class="h-2 rounded-full bg-slate-200 overflow-hidden"><div class="h-full bg-sky-500 rounded-full" style="width:${x.q ? x.mm / x.q * 100 : 0}%"></div></div>
+                <div class="text-[11px] font-bold text-slate-400">${x.mm}/${x.q} soal dikuasai</div>
+              </button>`).join("")}
+          </div>`;
+        }).join("")}
+
+        <p class="text-xs font-semibold text-slate-400 px-1">Cara baca: "Paham" = minimal 5 jawaban dan 80% benar dari 10 jawaban terakhir. "Hampir paham" 60–79%. "Belum paham" di bawah 60%. Soal pilihan ganda bisa ditebak, jadi ini indikator, bukan nilai rapor.</p>
+      `;
     }
 
     if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
